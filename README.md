@@ -69,13 +69,20 @@ cp android/keystore.properties.example android/keystore.properties
 
 Укажите путь к собственному `.jks` и данные подписи.
 
-## Запуск AT AI
+## Запуск приложения
 
-Передайте опубликованный HTTPS URL AT AI backend:
+Передайте опубликованный HTTPS URL AT AI backend и публичный Mapbox token:
 
 ```bash
 flutter run \
-  --dart-define=AT_AI_API_BASE_URL=https://transit-accesibleai.replit.app
+  --dart-define=AT_AI_API_BASE_URL=https://transit-accesibleai.replit.app \
+  --dart-define=MAPBOX_ACCESS_TOKEN=your-public-mapbox-token
+```
+
+Если основной API ещё не возвращает `googleServerClientId`, добавьте:
+
+```text
+--dart-define=GOOGLE_SERVER_CLIENT_ID=your-web-oauth-client-id
 ```
 
 Для выбора устройства:
@@ -83,7 +90,8 @@ flutter run \
 ```bash
 flutter devices
 flutter run -d DEVICE_ID \
-  --dart-define=AT_AI_API_BASE_URL=https://transit-accesibleai.replit.app
+  --dart-define=AT_AI_API_BASE_URL=https://transit-accesibleai.replit.app \
+  --dart-define=MAPBOX_ACCESS_TOKEN=your-public-mapbox-token
 ```
 
 Дополнительные сведения находятся в [AT_AI_INTEGRATION.md](AT_AI_INTEGRATION.md).
@@ -95,7 +103,8 @@ dart format --output=none --set-exit-if-changed lib test
 flutter analyze
 flutter test
 flutter build apk --release \
-  --dart-define=AT_AI_API_BASE_URL=https://transit-accesibleai.replit.app
+  --dart-define=AT_AI_API_BASE_URL=https://transit-accesibleai.replit.app \
+  --dart-define=MAPBOX_ACCESS_TOKEN=your-public-mapbox-token
 ```
 
 Для iOS после `flutter pub get`:
@@ -105,5 +114,6 @@ cd ios
 pod install
 cd ..
 flutter run \
-  --dart-define=AT_AI_API_BASE_URL=https://transit-accesibleai.replit.app
+  --dart-define=AT_AI_API_BASE_URL=https://transit-accesibleai.replit.app \
+  --dart-define=MAPBOX_ACCESS_TOKEN=your-public-mapbox-token
 ```
