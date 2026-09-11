@@ -68,7 +68,7 @@ class _AiAssistantScreenState extends ConsumerState<AiAssistantScreen> {
             const Padding(
               padding: EdgeInsets.only(top: 4),
               child: Text(
-                'AI Dispatcher',
+                'Travel & ride assistant',
                 style: TextStyle(fontWeight: FontWeight.w600),
               ),
             ),
@@ -192,22 +192,16 @@ class _AiAssistantScreenState extends ConsumerState<AiAssistantScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const Text(
-              'Trip suggestion',
+              'Route ready',
               style: TextStyle(fontWeight: FontWeight.bold),
             ),
             if (suggestion.pickup != null) Text('From: ${suggestion.pickup}'),
             if (suggestion.destination != null)
               Text('To: ${suggestion.destination}'),
-            if (suggestion.vehicleType != null)
-              Text('Vehicle: ${suggestion.vehicleType}'),
-            if (suggestion.estimatedPrice != null)
-              Text('Estimated price: ${suggestion.estimatedPrice}'),
-            if (suggestion.pickupTime != null)
-              Text('Pickup time: ${suggestion.pickupTime}'),
             const SizedBox(height: 6),
             OutlinedButton(
               onPressed: () => context.pop<OrderSuggestion>(suggestion),
-              child: const Text('Continue booking in app'),
+              child: const Text('Continue in Plan Ride'),
             ),
           ],
         ),

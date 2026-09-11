@@ -18,16 +18,10 @@ class AiMessage {
 class OrderSuggestion {
   final String? pickup;
   final String? destination;
-  final String? vehicleType;
-  final String? estimatedPrice;
-  final String? pickupTime;
 
   const OrderSuggestion({
     this.pickup,
     this.destination,
-    this.vehicleType,
-    this.estimatedPrice,
-    this.pickupTime,
   });
 
   factory OrderSuggestion.fromJson(Map<String, dynamic> json) {
@@ -36,11 +30,6 @@ class OrderSuggestion {
       destination: json['dropoff']?.toString() ??
           json['destination']?.toString() ??
           json['destinationAddress']?.toString(),
-      vehicleType: json['vehicleType']?.toString(),
-      estimatedPrice:
-          json['estimatedPrice']?.toString() ?? json['price']?.toString(),
-      pickupTime: json['pickupTime']?.toString() ??
-          json['estimatedPickupTime']?.toString(),
     );
   }
 }

@@ -74,7 +74,6 @@ class _PlanRideScreenState extends ConsumerState<PlanRideScreen> {
 
   // Schedule state
   ScheduleRideResult? _scheduleResult;
-  bool _requiresAiScheduleConfirmation = false;
   bool _isSheetExpanded = true;
 
   // Defer mounting the GoogleMap platform view until the push transition
@@ -347,21 +346,9 @@ class _PlanRideScreenState extends ConsumerState<PlanRideScreen> {
     return null;
   }
 
-  bool _isImmediateAiPickupTime(String? value) {
-    final normalized = value?.trim().toLowerCase() ?? '';
-    return normalized.isEmpty ||
-        normalized == 'now' ||
-        normalized == 'right now' ||
-        normalized == 'asap' ||
-        normalized == 'сейчас' ||
-        normalized == 'прямо сейчас';
-  }
-
   Future<void> _handleAiSuggestion() async {
     final suggestion = await context.navigateToAiAssistant();
     if (!mounted || suggestion == null) return;
-    _requiresAiScheduleConfirmation =
-        !_isImmediateAiPickupTime(suggestion.pickupTime);
     DestinationAddress? pickup;
     DestinationAddress? destination;
     try {
@@ -376,10 +363,8 @@ class _PlanRideScreenState extends ConsumerState<PlanRideScreen> {
       final viewModel =
           ref.read(planRideViewModelProvider(_params).notifier);
       context.showErrorSnackBar(
-        _requiresAiScheduleConfirmation
-            ? 'Please correct the address and confirm the pickup time.'
-            : 'We could not verify one of those addresses. '
-                'Please correct it manually.',
+        'We could not verify one of those addresses. '
+        'Please correct it manually.',
       );
       if (pickup != null) {
         viewModel.setPickupFromMap(pickup);
@@ -402,46 +387,12 @@ class _PlanRideScreenState extends ConsumerState<PlanRideScreen> {
     vm.setDestinationFromMap(destination);
     _pickupController.text = pickup.address ?? '';
     _destinationController.text = destination.address ?? '';
-    final requested = suggestion.vehicleType?.toLowerCase().trim();
-    if (requested != null && requested.isNotEmpty) {
-      final match = _visibleRideTypes.where((item) {
-        final name = item.typeName.toLowerCase();
-        final vehicle =
-            item.vehicleType?.vehicleTypeDetail?.name?.toLowerCase() ?? '';
-        return name == requested || vehicle == requested;
-      }).firstOrNull;
-      if (match?.vehicleType?.vehicleTypeId != null) {
-        _selectedVehicleTypeId = match!.vehicleType!.vehicleTypeId;
-      }
-    }
-
-    if (!_isImmediateAiPickupTime(suggestion.pickupTime)) {
-      if (_isScheduleAvailable) {
-        context.showSnackBar(
-          'Please confirm the pickup time before continuing.',
-        );
-        await _showScheduleBottomSheet();
-      } else {
-        context.showErrorSnackBar(
-          'Scheduled pickup is not available for this ride type. '
-          'Please review the trip before continuing.',
-        );
-      }
-    } else {
-      context.showSnackBar(
-        'Please review the addresses, then continue to choose your ride.',
-      );
-    }
+    context.showSnackBar(
+      'Addresses are ready. Choose your time and ride type below.',
+    );
   }
 
   void _navigateToChooseRideIfReady() {
-    if (_requiresAiScheduleConfirmation) {
-      context.showErrorSnackBar(
-        'Confirm the pickup time before continuing.',
-      );
-      return;
-    }
-
     final viewModel = ref.read(planRideViewModelProvider(_params).notifier);
     final state = ref.read(planRideViewModelProvider(_params));
 
@@ -511,7 +462,6 @@ class _PlanRideScreenState extends ConsumerState<PlanRideScreen> {
     if (result != null && mounted) {
       setState(() {
         _scheduleResult = result;
-        _requiresAiScheduleConfirmation = false;
       });
     }
   }
