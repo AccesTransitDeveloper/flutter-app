@@ -9,6 +9,7 @@ import '../../core/theme/app_theme.dart';
 import '../../core/providers/app_providers.dart';
 import '../../core/providers/bottom_nav_visibility_provider.dart';
 import '../../data/repository/app_repository.dart';
+import '../../features/ai/ai_models.dart';
 import '../../viewmodels/activity_viewmodel.dart';
 import '../../viewmodels/home_viewmodel.dart';
 import '../../viewmodels/inbox_viewmodel.dart';
@@ -18,6 +19,7 @@ import '../../views/widgets/app_bottom_nav_bar.dart';
 import '../../views/widgets/app_text.dart';
 import 'profile/account_screen.dart';
 import 'activity/activity_screen.dart';
+import 'ai/ai_assistant_screen.dart';
 import 'booking/plan_ride_screen.dart';
 import 'support/inbox_screen.dart';
 import 'booking/current_ride_screen.dart';
@@ -33,6 +35,8 @@ class _MainScreenState extends ConsumerState<MainScreen>
     with WidgetsBindingObserver {
   int _currentNavIndex = 0;
   final Set<int> _visitedTabs = {0}; // Only Home is built initially
+  OrderSuggestion? _pendingAiSuggestion;
+  int _planRideRevision = 0;
 
   @override
   void initState() {
@@ -70,7 +74,9 @@ class _MainScreenState extends ConsumerState<MainScreen>
 
     // Refresh entity detail and information status when switching back to home tab
     if (index == 0 && previousIndex != 0) {
-      debugPrint('📱 Switched to home tab - refreshing entity detail & information status');
+      debugPrint(
+        '📱 Switched to home tab - refreshing entity detail & information status',
+      );
       ref.read(mainViewModelProvider.notifier).refreshEntityDetail();
       ref.read(homeViewModelProvider.notifier).getInformationStatus();
     }
@@ -81,9 +87,19 @@ class _MainScreenState extends ConsumerState<MainScreen>
     }
 
     // Refresh Inbox tab data on every visit
-    if (index == 2) {
+    if (index == 3) {
       ref.invalidate(inboxViewModelProvider);
     }
+  }
+
+  void _continueAiTripInPlanRide(OrderSuggestion suggestion) {
+    setState(() {
+      _pendingAiSuggestion = suggestion;
+      _planRideRevision += 1;
+      _currentNavIndex = 0;
+      _visitedTabs.add(0);
+    });
+    ref.read(bottomNavVisibleProvider.notifier).state = true;
   }
 
   @override
@@ -120,9 +136,10 @@ class _MainScreenState extends ConsumerState<MainScreen>
       // come from HomeViewModel, which is what fetches the vehicle types.
       final homeState = ref.watch(homeViewModelProvider);
       homeOrCurrentRide = PlanRideScreen(
-        key: const ValueKey('plan_ride_root'),
+        key: ValueKey('plan_ride_root_$_planRideRevision'),
         isRoot: true,
         initialPickupAddress: homeState.pickupAddress,
+        initialAiSuggestion: _pendingAiSuggestion,
         citySetting: homeState.vehicleTypeResponse?.citySetting,
         rideTypeItems: homeState.rideTypeItems,
       );
@@ -155,10 +172,14 @@ class _MainScreenState extends ConsumerState<MainScreen>
             else
               const SizedBox.shrink(),
             if (_visitedTabs.contains(2))
-              const InboxScreen(showBackButton: false)
+              AiAssistantScreen(onContinueInPlanRide: _continueAiTripInPlanRide)
             else
               const SizedBox.shrink(),
             if (_visitedTabs.contains(3))
+              const InboxScreen(showBackButton: false)
+            else
+              const SizedBox.shrink(),
+            if (_visitedTabs.contains(4))
               const AccountScreen()
             else
               const SizedBox.shrink(),
@@ -189,20 +210,17 @@ class _MainScreenState extends ConsumerState<MainScreen>
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
       ),
-      builder: (context) => LogoutBottomSheet(
-        isLoading: false,
-        onLogout: _performLogout,
-      ),
+      builder: (context) =>
+          LogoutBottomSheet(isLoading: false, onLogout: _performLogout),
     );
   }
 
   Future<void> _performLogout() async {
     final appRepository = ref.read(appRepositoryProvider);
     await appRepository.signOut();
-    final sharedPref = ref.read(sharedPreferenceManagerProvider).maybeWhen(
-          data: (data) => data,
-          orElse: () => null,
-        );
+    final sharedPref = ref
+        .read(sharedPreferenceManagerProvider)
+        .maybeWhen(data: (data) => data, orElse: () => null);
     await sharedPref?.signOut();
     if (mounted) {
       context.navigateToLogin();
@@ -231,11 +249,7 @@ class _BlockedCustomerScreen extends StatelessWidget {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(
-                Icons.block_rounded,
-                size: 100,
-                color: colors.colorTertiary,
-              ),
+              Icon(Icons.block_rounded, size: 100, color: colors.colorTertiary),
               const SizedBox(height: AppDimens.paddingXL),
               AppText.title(
                 getString(appStr.errorNotApprovedYet, 'error_not_approved_yet'),
@@ -244,7 +258,10 @@ class _BlockedCustomerScreen extends StatelessWidget {
               ),
               const SizedBox(height: AppDimens.paddingM),
               AppText.body(
-                getString(appStr.descriptionYourAccountIsBlocked, 'description_your_account_is_blocked'),
+                getString(
+                  appStr.descriptionYourAccountIsBlocked,
+                  'description_your_account_is_blocked',
+                ),
                 textAlign: TextAlign.center,
                 color: colors.colorText.withValues(alpha: 0.6),
               ),
@@ -257,7 +274,9 @@ class _BlockedCustomerScreen extends StatelessWidget {
                   style: ElevatedButton.styleFrom(
                     backgroundColor: colors.colorButtonBackground,
                     foregroundColor: colors.colorButtonText,
-                    padding: const EdgeInsets.symmetric(vertical: AppDimens.paddingM),
+                    padding: const EdgeInsets.symmetric(
+                      vertical: AppDimens.paddingM,
+                    ),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(10),
                     ),
@@ -277,11 +296,15 @@ class _BlockedCustomerScreen extends StatelessWidget {
                   onPressed: onContactUs,
                   style: OutlinedButton.styleFrom(
                     foregroundColor: colors.colorText,
-                    padding: const EdgeInsets.symmetric(vertical: AppDimens.paddingM),
+                    padding: const EdgeInsets.symmetric(
+                      vertical: AppDimens.paddingM,
+                    ),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(10),
                     ),
-                    side: BorderSide(color: colors.colorText.withValues(alpha: 0.3)),
+                    side: BorderSide(
+                      color: colors.colorText.withValues(alpha: 0.3),
+                    ),
                   ),
                   child: AppText.body(
                     getString(appStr.buttonContactUs, 'button_contact_us'),

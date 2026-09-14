@@ -13,6 +13,7 @@ import '../../../models/requests/get_vehicle_types_request.dart';
 import '../../../models/ride_type_item.dart';
 import '../../../models/responses/booking/get_vehicle_type_response.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../features/ai/ai_models.dart';
 import '../../../viewmodels/plan_ride_viewmodel.dart';
 import '../../../views/widgets/app_address_input_card.dart';
 import '../../../views/widgets/app_button.dart';
@@ -32,6 +33,7 @@ class PlanRideScreen extends ConsumerStatefulWidget {
   final RideType? rideType;
   final CitySetting? citySetting;
   final String? selectedVehicleTypeId;
+  final OrderSuggestion? initialAiSuggestion;
 
   /// The ride types offered for this city. The picker used to live on the home
   /// screen; it now sits beside the "for me / for other" chip here, so the list
@@ -49,6 +51,7 @@ class PlanRideScreen extends ConsumerStatefulWidget {
     this.rideType,
     this.citySetting,
     this.selectedVehicleTypeId,
+    this.initialAiSuggestion,
     this.rideTypeItems = const [],
     this.isRoot = false,
   });
@@ -100,7 +103,8 @@ class _PlanRideScreenState extends ConsumerState<PlanRideScreen> {
   String? _selectedVehicleTypeId;
 
   DriverSettings? get _driverSettings => widget.citySetting?.driverSetting;
-  BusinessSettings? get _businessSettings => widget.citySetting?.businessSettings;
+  BusinessSettings? get _businessSettings =>
+      widget.citySetting?.businessSettings;
 
   /// Whether adding stops (multiple locations) is allowed for the selected
   /// ride type. Driven by the MULTIPLE_LOCATION business setting flag, exactly
@@ -125,11 +129,12 @@ class _PlanRideScreenState extends ConsumerState<PlanRideScreen> {
   }
 
   bool get _isNowAvailable => SchedulePickerSegment.isNowAvailableFromBusiness(
-        rideType: _rideType,
-        businessSettings: _businessSettings,
-      );
+    rideType: _rideType,
+    businessSettings: _businessSettings,
+  );
 
-  bool get _isScheduleAvailable => SchedulePickerSegment.isScheduleAvailableFromBusiness(
+  bool get _isScheduleAvailable =>
+      SchedulePickerSegment.isScheduleAvailableFromBusiness(
         rideType: _rideType,
         businessSettings: _businessSettings,
       );
@@ -164,7 +169,8 @@ class _PlanRideScreenState extends ConsumerState<PlanRideScreen> {
     // ride type — empty.
     final defaultRideType = _visibleRideTypes.firstOrNull;
     _rideType = widget.rideType ?? defaultRideType?.type;
-    _selectedVehicleTypeId = widget.selectedVehicleTypeId ??
+    _selectedVehicleTypeId =
+        widget.selectedVehicleTypeId ??
         (widget.rideType == null
             ? defaultRideType?.vehicleType?.vehicleTypeId
             : null);
@@ -186,7 +192,12 @@ class _PlanRideScreenState extends ConsumerState<PlanRideScreen> {
     _destinationFocusNode.addListener(_onDestinationFocusChange);
 
     // If no pickup was passed in, pre-fill it with the current location.
-    if (widget.initialPickupAddress == null) {
+    if (widget.initialAiSuggestion != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        _applyAiSuggestion(widget.initialAiSuggestion!);
+      });
+    } else if (widget.initialPickupAddress == null) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
         ref
@@ -210,6 +221,7 @@ class _PlanRideScreenState extends ConsumerState<PlanRideScreen> {
           if (mounted) setState(() => _showMap = true);
         }
       }
+
       animation.addStatusListener(statusListener);
     });
   }
@@ -249,7 +261,9 @@ class _PlanRideScreenState extends ConsumerState<PlanRideScreen> {
   }
 
   void _onSheetStateChanged(bool isExpanded) {
-    setState(() { _isSheetExpanded = isExpanded; });
+    setState(() {
+      _isSheetExpanded = isExpanded;
+    });
     // When sheet is dragged down (collapsed), enter map selection mode
     if (!isExpanded) {
       final state = ref.read(planRideViewModelProvider(_params));
@@ -277,10 +291,12 @@ class _PlanRideScreenState extends ConsumerState<PlanRideScreen> {
       if (stateBefore.currentFocus == LocationFocus.pickup) {
         _pickupController.text = stateAfter.pickupAddress?.address ?? '';
       } else {
-        _destinationController.text = stateAfter.destinationAddress?.address ?? '';
+        _destinationController.text =
+            stateAfter.destinationAddress?.address ?? '';
       }
 
-      if (stateAfter.pickupAddress != null && stateAfter.destinationAddress != null) {
+      if (stateAfter.pickupAddress != null &&
+          stateAfter.destinationAddress != null) {
         _navigateToChooseRideIfReady();
       }
       // If not ready, sheet is already expanded for user to fill missing address
@@ -341,7 +357,8 @@ class _PlanRideScreenState extends ConsumerState<PlanRideScreen> {
     for (final match in matches) {
       if (match.placeId == null) continue;
       final details = await _mapManager.getPlaceDetails(match.placeId!);
-      if (details?.latitude != null && details?.longitude != null) return details;
+      if (details?.latitude != null && details?.longitude != null)
+        return details;
     }
     return null;
   }
@@ -349,6 +366,10 @@ class _PlanRideScreenState extends ConsumerState<PlanRideScreen> {
   Future<void> _handleAiSuggestion() async {
     final suggestion = await context.navigateToAiAssistant();
     if (!mounted || suggestion == null) return;
+    await _applyAiSuggestion(suggestion);
+  }
+
+  Future<void> _applyAiSuggestion(OrderSuggestion suggestion) async {
     DestinationAddress? pickup;
     DestinationAddress? destination;
     try {
@@ -360,8 +381,7 @@ class _PlanRideScreenState extends ConsumerState<PlanRideScreen> {
     }
     if (!mounted) return;
     if (pickup == null || destination == null) {
-      final viewModel =
-          ref.read(planRideViewModelProvider(_params).notifier);
+      final viewModel = ref.read(planRideViewModelProvider(_params).notifier);
       context.showErrorSnackBar(
         'We could not verify one of those addresses. '
         'Please correct it manually.',
@@ -485,7 +505,8 @@ class _PlanRideScreenState extends ConsumerState<PlanRideScreen> {
     if (!mounted) return;
 
     final stateAfter = ref.read(planRideViewModelProvider(_params));
-    if (stateAfter.pickupAddress != null && stateAfter.destinationAddress != null) {
+    if (stateAfter.pickupAddress != null &&
+        stateAfter.destinationAddress != null) {
       _navigateToChooseRideIfReady();
     } else {
       // Need the other address - focus on it
@@ -525,112 +546,115 @@ class _PlanRideScreenState extends ConsumerState<PlanRideScreen> {
           return false;
         },
         child: Stack(
-        children: [
-          // Layer 1: Map (deferred until the entrance transition completes)
-          Positioned.fill(
-            child: _showMap
-                ? MapHost(manager: _mapManager)
-                : ColoredBox(color: colors.colorBackground),
-          ),
+          children: [
+            // Layer 1: Map (deferred until the entrance transition completes)
+            Positioned.fill(
+              child: _showMap
+                  ? MapHost(manager: _mapManager)
+                  : ColoredBox(color: colors.colorBackground),
+            ),
 
-          // Layer 2: Map pin (centered, shown when in map selection mode)
-          if (state.isMapSelectionMode)
-            Positioned(
-              left: 0,
-              right: 0,
-              top: 0,
-              bottom: 100,
-              child: IgnorePointer(
-                child: Center(
-                  child: Image.asset(
-                    'assets/images/ic_set_location.png',
-                    width: 40,
-                    height: 40,
-                    errorBuilder: (context, error, stackTrace) => Icon(
-                      Icons.location_on,
-                      color: colors.colorPrimary,
-                      size: 48,
+            // Layer 2: Map pin (centered, shown when in map selection mode)
+            if (state.isMapSelectionMode)
+              Positioned(
+                left: 0,
+                right: 0,
+                top: 0,
+                bottom: 100,
+                child: IgnorePointer(
+                  child: Center(
+                    child: Image.asset(
+                      'assets/images/ic_set_location.png',
+                      width: 40,
+                      height: 40,
+                      errorBuilder: (context, error, stackTrace) => Icon(
+                        Icons.location_on,
+                        color: colors.colorPrimary,
+                        size: 48,
+                      ),
                     ),
                   ),
                 ),
               ),
-            ),
 
-          // Layer 3: My location button, riding just above the sheet.
-          ValueListenableBuilder<double?>(
-            valueListenable: _sheetExtent,
-            builder: (context, extent, child) {
-              if (extent == null || extent > _hideMapButtonsAboveExtent) {
-                return const SizedBox.shrink();
-              }
-              return Positioned(
-                right: AppDimens.padding,
-                bottom: MediaQuery.of(context).size.height * extent +
-                    AppDimens.padding,
-                child: child!,
-              );
-            },
-            child: GestureDetector(
-              onTap: () {
-                final viewModel = ref.read(planRideViewModelProvider(_params).notifier);
-                viewModel.moveToCurrentLocation();
+            // Layer 3: My location button, riding just above the sheet.
+            ValueListenableBuilder<double?>(
+              valueListenable: _sheetExtent,
+              builder: (context, extent, child) {
+                if (extent == null || extent > _hideMapButtonsAboveExtent) {
+                  return const SizedBox.shrink();
+                }
+                return Positioned(
+                  right: AppDimens.padding,
+                  bottom:
+                      MediaQuery.of(context).size.height * extent +
+                      AppDimens.padding,
+                  child: child!,
+                );
               },
-              child: Container(
-                width: 48,
-                height: 48,
-                decoration: BoxDecoration(
-                  color: colors.colorBackground,
-                  shape: BoxShape.circle,
-                  boxShadow: [
-                    BoxShadow(
-                      color: colors.colorText.withValues(alpha: 0.1),
-                      blurRadius: 8,
-                      offset: const Offset(0, 2),
-                    ),
-                  ],
-                ),
-                child: Icon(
-                  Icons.my_location,
-                  color: colors.colorText,
-                  size: AppDimens.iconSize,
-                ),
-              ),
-            ),
-          ),
-
-          // Layer 4: Bottom sheet
-          AppDraggableScrollableSheet(
-            controller: _sheetController,
-            maxChildSize: 0.95,
-            sheetColor: colors.colorBackground,
-            initialState: AppSheetInitialState.expanded,
-            collapsedContent: _buildCollapsedContent(context, state),
-            expandedContent: _buildExpandedContent(context, state),
-            onStateChanged: _onSheetStateChanged,
-          ),
-
-          // Layer 5: Back button (hidden when sheet is expanded)
-          if (!_isSheetExpanded)
-            Positioned(
-              top: topPadding + AppDimens.padding,
-              left: AppDimens.padding,
               child: GestureDetector(
-                onTap: () => context.goBack(),
+                onTap: () {
+                  final viewModel = ref.read(
+                    planRideViewModelProvider(_params).notifier,
+                  );
+                  viewModel.moveToCurrentLocation();
+                },
                 child: Container(
                   width: 48,
                   height: 48,
                   decoration: BoxDecoration(
                     color: colors.colorBackground,
                     shape: BoxShape.circle,
+                    boxShadow: [
+                      BoxShadow(
+                        color: colors.colorText.withValues(alpha: 0.1),
+                        blurRadius: 8,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
                   ),
                   child: Icon(
-                    Icons.arrow_back,
-                    color: colors.colorPrimary,
+                    Icons.my_location,
+                    color: colors.colorText,
                     size: AppDimens.iconSize,
                   ),
                 ),
               ),
             ),
+
+            // Layer 4: Bottom sheet
+            AppDraggableScrollableSheet(
+              controller: _sheetController,
+              maxChildSize: 0.95,
+              sheetColor: colors.colorBackground,
+              initialState: AppSheetInitialState.expanded,
+              collapsedContent: _buildCollapsedContent(context, state),
+              expandedContent: _buildExpandedContent(context, state),
+              onStateChanged: _onSheetStateChanged,
+            ),
+
+            // Layer 5: Back button (hidden when sheet is expanded)
+            if (!_isSheetExpanded)
+              Positioned(
+                top: topPadding + AppDimens.padding,
+                left: AppDimens.padding,
+                child: GestureDetector(
+                  onTap: () => context.goBack(),
+                  child: Container(
+                    width: 48,
+                    height: 48,
+                    decoration: BoxDecoration(
+                      color: colors.colorBackground,
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(
+                      Icons.arrow_back,
+                      color: colors.colorPrimary,
+                      size: AppDimens.iconSize,
+                    ),
+                  ),
+                ),
+              ),
           ],
         ),
       ),
@@ -657,14 +681,13 @@ class _PlanRideScreenState extends ConsumerState<PlanRideScreen> {
               fontWeight: FontWeight.w600,
             ),
             const SizedBox(height: AppDimens.paddingXS),
-            AppText.body(
-              'Drag map to move pin',
-              color: colors.colorText,
-            ),
+            AppText.body('Drag map to move pin', color: colors.colorText),
             const SizedBox(height: AppDimens.paddingXL),
             GestureDetector(
               onTap: () {
-                final viewModel = ref.read(planRideViewModelProvider(_params).notifier);
+                final viewModel = ref.read(
+                  planRideViewModelProvider(_params).notifier,
+                );
                 viewModel.exitMapSelectionMode();
                 _sheetController.expand();
               },
@@ -679,11 +702,7 @@ class _PlanRideScreenState extends ConsumerState<PlanRideScreen> {
                 ),
                 child: Row(
                   children: [
-                    Icon(
-                      Icons.circle,
-                      color: colors.colorText,
-                      size: 10,
-                    ),
+                    Icon(Icons.circle, color: colors.colorText, size: 10),
                     const SizedBox(width: AppDimens.paddingM),
                     Expanded(
                       child: isLoading
@@ -705,8 +724,12 @@ class _PlanRideScreenState extends ConsumerState<PlanRideScreen> {
                               ],
                             )
                           : AppText.body(
-                              addressText.isNotEmpty ? addressText : 'Move map to select location',
-                              color: addressText.isNotEmpty ? colors.colorText : colors.colorText,
+                              addressText.isNotEmpty
+                                  ? addressText
+                                  : 'Move map to select location',
+                              color: addressText.isNotEmpty
+                                  ? colors.colorText
+                                  : colors.colorText,
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                             ),
@@ -723,7 +746,9 @@ class _PlanRideScreenState extends ConsumerState<PlanRideScreen> {
             const SizedBox(height: AppDimens.padding),
             AppFilledButton(
               text: isPickupFocus ? 'Confirm pickup' : 'Confirm destination',
-              onPressed: addressText.isNotEmpty && !isLoading ? _onConfirmMapSelection : null,
+              onPressed: addressText.isNotEmpty && !isLoading
+                  ? _onConfirmMapSelection
+                  : null,
             ),
           ],
         ),
@@ -746,10 +771,7 @@ class _PlanRideScreenState extends ConsumerState<PlanRideScreen> {
             fontWeight: FontWeight.w600,
           ),
           const SizedBox(height: AppDimens.paddingXS),
-          AppText.body(
-            'Drag map to move pin',
-            color: colors.colorText,
-          ),
+          AppText.body('Drag map to move pin', color: colors.colorText),
           const SizedBox(height: AppDimens.paddingXL),
           GestureDetector(
             onTap: () => _sheetController.expand(),
@@ -772,7 +794,9 @@ class _PlanRideScreenState extends ConsumerState<PlanRideScreen> {
                   const SizedBox(width: AppDimens.paddingM),
                   Expanded(
                     child: AppText.body(
-                      hasAddress ? currentAddress : (isPickupFocus ? 'Set pickup' : 'Set destination'),
+                      hasAddress
+                          ? currentAddress
+                          : (isPickupFocus ? 'Set pickup' : 'Set destination'),
                       color: hasAddress ? colors.colorText : colors.colorText,
                     ),
                   ),
@@ -862,10 +886,7 @@ class _PlanRideScreenState extends ConsumerState<PlanRideScreen> {
                   ),
                 ),
               const Spacer(),
-              AppText.title(
-                'Plan your ride',
-                fontWeight: FontWeight.w600,
-              ),
+              AppText.title('Plan your ride', fontWeight: FontWeight.w600),
               const Spacer(),
               const SizedBox(width: AppDimens.iconSize),
             ],
@@ -885,8 +906,9 @@ class _PlanRideScreenState extends ConsumerState<PlanRideScreen> {
                         ? Icons.access_time
                         : Icons.calendar_today_outlined,
                     label: _scheduleResult?.chipLabel ?? _defaultChipLabel,
-                    onTap:
-                        _isScheduleChipEnabled ? _showScheduleBottomSheet : null,
+                    onTap: _isScheduleChipEnabled
+                        ? _showScheduleBottomSheet
+                        : null,
                   ),
                 ),
                 const SizedBox(width: AppDimens.paddingM),
@@ -926,10 +948,12 @@ class _PlanRideScreenState extends ConsumerState<PlanRideScreen> {
             pickupFocusNode: _pickupFocusNode,
             destinationFocusNode: _destinationFocusNode,
             isPickupFocused: state.currentFocus == LocationFocus.pickup,
-            isDestinationFocused: state.currentFocus == LocationFocus.destination,
+            isDestinationFocused:
+                state.currentFocus == LocationFocus.destination,
             onSearchChanged: _onSearchChanged,
             onClearPickup: () => _onClearLocation(LocationFocus.pickup),
-            onClearDestination: () => _onClearLocation(LocationFocus.destination),
+            onClearDestination: () =>
+                _onClearLocation(LocationFocus.destination),
             // Hide the "+" entirely when the ride type doesn't allow multiple
             // stops (mirrors native buttonType = .none), otherwise enable it
             // once a pickup is set.
@@ -937,7 +961,8 @@ class _PlanRideScreenState extends ConsumerState<PlanRideScreen> {
             isAddButtonEnabled: state.pickupAddress != null,
             onAddStopTap: () {
               final currentState = ref.read(planRideViewModelProvider(_params));
-              if (currentState.pickupAddress != null && _isMultipleStopAllowed) {
+              if (currentState.pickupAddress != null &&
+                  _isMultipleStopAllowed) {
                 context.navigateToAddStops(
                   pickup: currentState.pickupAddress!,
                   destination: currentState.destinationAddress,
@@ -961,14 +986,16 @@ class _PlanRideScreenState extends ConsumerState<PlanRideScreen> {
 
           // Places list
           if (!state.isSearching && !state.isLoadingPlaceDetails)
-            ...displayList.map((place) => AppListItem(
-                  icon: place.isRecentAddress == true
-                      ? Icons.access_time
-                      : Icons.location_on_outlined,
-                  title: place.title ?? place.address ?? '',
-                  subtitle: place.city,
-                  onTap: () => _onPlaceSelected(place),
-                )),
+            ...displayList.map(
+              (place) => AppListItem(
+                icon: place.isRecentAddress == true
+                    ? Icons.access_time
+                    : Icons.location_on_outlined,
+                title: place.title ?? place.address ?? '',
+                subtitle: place.city,
+                onTap: () => _onPlaceSelected(place),
+              ),
+            ),
 
           const SizedBox(height: AppDimens.padding),
           Divider(color: colors.colorText.withValues(alpha: 0.2)),
@@ -1002,5 +1029,4 @@ class _PlanRideScreenState extends ConsumerState<PlanRideScreen> {
       ),
     );
   }
-
 }

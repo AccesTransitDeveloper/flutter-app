@@ -7,7 +7,9 @@ import '../../../features/ai/ai_viewmodel.dart';
 import '../../../features/ai/voice_orb.dart';
 
 class AiAssistantScreen extends ConsumerStatefulWidget {
-  const AiAssistantScreen({super.key});
+  final ValueChanged<OrderSuggestion>? onContinueInPlanRide;
+
+  const AiAssistantScreen({super.key, this.onContinueInPlanRide});
 
   @override
   ConsumerState<AiAssistantScreen> createState() => _AiAssistantScreenState();
@@ -46,13 +48,14 @@ class _AiAssistantScreenState extends ConsumerState<AiAssistantScreen> {
     final mode = state.isListening
         ? VoiceOrbMode.listening
         : state.isLoading
-            ? VoiceOrbMode.thinking
-            : state.isSpeaking
-                ? VoiceOrbMode.speaking
-                : VoiceOrbMode.idle;
+        ? VoiceOrbMode.thinking
+        : state.isSpeaking
+        ? VoiceOrbMode.speaking
+        : VoiceOrbMode.idle;
 
     return Scaffold(
       appBar: AppBar(
+        automaticallyImplyLeading: widget.onContinueInPlanRide == null,
         title: const Text('AT AI'),
         actions: [
           IconButton(
@@ -63,96 +66,100 @@ class _AiAssistantScreenState extends ConsumerState<AiAssistantScreen> {
         ],
       ),
       body: SafeArea(
-        child: Column(
-          children: [
-            const Padding(
-              padding: EdgeInsets.only(top: 4),
-              child: Text(
-                'Travel & ride assistant',
-                style: TextStyle(fontWeight: FontWeight.w600),
+        child: Padding(
+          padding: EdgeInsets.only(
+            bottom: widget.onContinueInPlanRide == null ? 0 : 82,
+          ),
+          child: Column(
+            children: [
+              const Padding(
+                padding: EdgeInsets.only(top: 4),
+                child: Text(
+                  'Travel & ride assistant',
+                  style: TextStyle(fontWeight: FontWeight.w600),
+                ),
               ),
-            ),
-            VoiceOrb(mode: mode, size: 82),
-            Text(
-              state.isListening
-                  ? 'Listening…'
-                  : state.isLoading
-                      ? 'Thinking…'
-                      : state.isSpeaking
-                          ? 'Speaking…'
-                          : 'Ready',
-            ),
-            if (state.isSpeaking)
-              TextButton.icon(
-                onPressed: viewModel.stopPlayback,
-                icon: const Icon(Icons.stop),
-                label: const Text('Stop playback'),
+              VoiceOrb(mode: mode, size: 82),
+              Text(
+                state.isListening
+                    ? 'Listening…'
+                    : state.isLoading
+                    ? 'Thinking…'
+                    : state.isSpeaking
+                    ? 'Speaking…'
+                    : 'Ready',
               ),
-            Expanded(
-              child: ListView.builder(
-                controller: _scroll,
-                padding: const EdgeInsets.all(12),
-                itemCount: state.messages.length,
-                itemBuilder: (_, index) => _bubble(state.messages[index]),
+              if (state.isSpeaking)
+                TextButton.icon(
+                  onPressed: viewModel.stopPlayback,
+                  icon: const Icon(Icons.stop),
+                  label: const Text('Stop playback'),
+                ),
+              Expanded(
+                child: ListView.builder(
+                  controller: _scroll,
+                  padding: const EdgeInsets.all(12),
+                  itemCount: state.messages.length,
+                  itemBuilder: (_, index) => _bubble(state.messages[index]),
+                ),
               ),
-            ),
-            if (state.orderSuggestion != null)
-              _orderCard(state.orderSuggestion!),
-            if (state.error != null)
-              MaterialBanner(
-                content: Text(state.error!),
-                actions: [
-                  TextButton(
-                    onPressed: state.isLoading || state.retryMessage == null
-                        ? null
-                        : viewModel.retryLastMessage,
-                    child: const Text('Retry'),
-                  ),
-                  TextButton(
-                    onPressed: () => ref
-                        .read(aiAssistantProvider.notifier)
-                        .clearError(),
-                    child: const Text('Dismiss'),
-                  ),
-                ],
-              ),
-            Padding(
-              padding: const EdgeInsets.all(10),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: TextField(
-                      controller: _input,
-                      textInputAction: TextInputAction.send,
-                      onChanged: (_) => setState(() {}),
-                      onSubmitted: (_) => _send(),
-                      decoration: const InputDecoration(
-                        hintText: 'Ask AT AI…',
-                        border: OutlineInputBorder(),
+              if (state.orderSuggestion != null)
+                _orderCard(state.orderSuggestion!),
+              if (state.error != null)
+                MaterialBanner(
+                  content: Text(state.error!),
+                  actions: [
+                    TextButton(
+                      onPressed: state.isLoading || state.retryMessage == null
+                          ? null
+                          : viewModel.retryLastMessage,
+                      child: const Text('Retry'),
+                    ),
+                    TextButton(
+                      onPressed: () =>
+                          ref.read(aiAssistantProvider.notifier).clearError(),
+                      child: const Text('Dismiss'),
+                    ),
+                  ],
+                ),
+              Padding(
+                padding: const EdgeInsets.all(10),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        controller: _input,
+                        textInputAction: TextInputAction.send,
+                        onChanged: (_) => setState(() {}),
+                        onSubmitted: (_) => _send(),
+                        decoration: const InputDecoration(
+                          hintText: 'Ask AT AI…',
+                          border: OutlineInputBorder(),
+                        ),
                       ),
                     ),
-                  ),
-                  IconButton(
-                    onPressed: state.isLoading
-                        ? null
-                        : (state.isListening
-                            ? viewModel.stopListening
-                            : viewModel.startListening),
-                    icon: Icon(
-                      state.isListening ? Icons.stop_circle : Icons.mic,
+                    IconButton(
+                      onPressed: state.isLoading
+                          ? null
+                          : (state.isListening
+                                ? viewModel.stopListening
+                                : viewModel.startListening),
+                      icon: Icon(
+                        state.isListening ? Icons.stop_circle : Icons.mic,
+                      ),
+                      tooltip: 'Voice message',
                     ),
-                    tooltip: 'Voice message',
-                  ),
-                  IconButton(
-                    onPressed: state.isLoading || _input.text.trim().isEmpty
-                        ? null
-                        : _send,
-                    icon: const Icon(Icons.send),
-                  ),
-                ],
+                    IconButton(
+                      onPressed: state.isLoading || _input.text.trim().isEmpty
+                          ? null
+                          : _send,
+                      icon: const Icon(Icons.send),
+                    ),
+                  ],
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -161,8 +168,9 @@ class _AiAssistantScreenState extends ConsumerState<AiAssistantScreen> {
   Widget _bubble(AiMessage message) {
     final colors = Theme.of(context).colorScheme;
     return Align(
-      alignment:
-          message.fromUser ? Alignment.centerRight : Alignment.centerLeft,
+      alignment: message.fromUser
+          ? Alignment.centerRight
+          : Alignment.centerLeft,
       child: Container(
         margin: const EdgeInsets.symmetric(vertical: 4),
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
@@ -175,9 +183,7 @@ class _AiAssistantScreenState extends ConsumerState<AiAssistantScreen> {
         ),
         child: Text(
           message.text,
-          style: TextStyle(
-            color: message.fromUser ? colors.onPrimary : null,
-          ),
+          style: TextStyle(color: message.fromUser ? colors.onPrimary : null),
         ),
       ),
     );
@@ -200,7 +206,14 @@ class _AiAssistantScreenState extends ConsumerState<AiAssistantScreen> {
               Text('To: ${suggestion.destination}'),
             const SizedBox(height: 6),
             OutlinedButton(
-              onPressed: () => context.pop<OrderSuggestion>(suggestion),
+              onPressed: () {
+                final onContinue = widget.onContinueInPlanRide;
+                if (onContinue != null) {
+                  onContinue(suggestion);
+                } else {
+                  context.pop<OrderSuggestion>(suggestion);
+                }
+              },
               child: const Text('Continue in Plan Ride'),
             ),
           ],

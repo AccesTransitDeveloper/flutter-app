@@ -22,6 +22,7 @@ class AppBottomNavBar extends StatelessWidget {
   static const _items = <_NavData>[
     _NavData(Icons.home_outlined, Icons.home_rounded, 'Home'),
     _NavData(Icons.receipt_long_outlined, Icons.receipt_long, 'Activity'),
+    _NavData(Icons.auto_awesome_outlined, Icons.auto_awesome, 'AT AI'),
     _NavData(Icons.inbox_outlined, Icons.inbox_rounded, 'Inbox'),
     _NavData(Icons.person_outline_rounded, Icons.person_rounded, 'Account'),
   ];
@@ -32,7 +33,12 @@ class AppBottomNavBar extends StatelessWidget {
     final bottomInset = MediaQuery.of(context).padding.bottom;
 
     return Container(
-      margin: EdgeInsets.fromLTRB(14, 6, 14, bottomInset > 0 ? bottomInset : 12),
+      margin: EdgeInsets.fromLTRB(
+        14,
+        6,
+        14,
+        bottomInset > 0 ? bottomInset : 12,
+      ),
       // Elevation lives on the outer box (a ClipRRect would clip the shadow) so
       // the translucent bar clearly floats above the screen.
       decoration: BoxDecoration(
@@ -55,8 +61,9 @@ class AppBottomNavBar extends StatelessWidget {
             decoration: BoxDecoration(
               color: colors.colorBackground.withValues(alpha: 0.7),
               borderRadius: BorderRadius.circular(26),
-              border:
-                  Border.all(color: colors.colorText.withValues(alpha: 0.06)),
+              border: Border.all(
+                color: colors.colorText.withValues(alpha: 0.06),
+              ),
             ),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceAround,
@@ -106,9 +113,13 @@ class _NavItem extends StatelessWidget {
         duration: const Duration(milliseconds: 260),
         curve: Curves.easeOut,
         padding: EdgeInsets.symmetric(
-            horizontal: isSelected ? 13 : 10, vertical: 10),
+          horizontal: isSelected ? 13 : 10,
+          vertical: 10,
+        ),
         decoration: BoxDecoration(
-          color: isSelected ? primary.withValues(alpha: 0.12) : Colors.transparent,
+          color: isSelected
+              ? primary.withValues(alpha: 0.12)
+              : Colors.transparent,
           borderRadius: BorderRadius.circular(18),
         ),
         child: Row(
