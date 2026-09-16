@@ -35,8 +35,6 @@ class _MainScreenState extends ConsumerState<MainScreen>
     with WidgetsBindingObserver {
   int _currentNavIndex = 0;
   final Set<int> _visitedTabs = {0}; // Only Home is built initially
-  OrderSuggestion? _pendingAiSuggestion;
-  int _planRideRevision = 0;
 
   @override
   void initState() {
@@ -92,14 +90,20 @@ class _MainScreenState extends ConsumerState<MainScreen>
     }
   }
 
-  void _continueAiTripInPlanRide(OrderSuggestion suggestion) {
-    setState(() {
-      _pendingAiSuggestion = suggestion;
-      _planRideRevision += 1;
-      _currentNavIndex = 0;
-      _visitedTabs.add(0);
-    });
-    ref.read(bottomNavVisibleProvider.notifier).state = true;
+  void _confirmAiRoute(ConfirmedAiRoute route) {
+    final homeState = ref.read(homeViewModelProvider);
+    final rideTypes = homeState.rideTypeItems
+        .where((item) => item.isVisible)
+        .toList();
+    final defaultRideType = rideTypes.isEmpty ? null : rideTypes.first;
+
+    context.navigateToChooseRide(
+      pickup: route.pickup,
+      destinations: [route.destination],
+      rideType: defaultRideType?.type,
+      citySetting: homeState.vehicleTypeResponse?.citySetting,
+      selectedVehicleTypeId: defaultRideType?.vehicleType?.vehicleTypeId,
+    );
   }
 
   @override
@@ -136,10 +140,9 @@ class _MainScreenState extends ConsumerState<MainScreen>
       // come from HomeViewModel, which is what fetches the vehicle types.
       final homeState = ref.watch(homeViewModelProvider);
       homeOrCurrentRide = PlanRideScreen(
-        key: ValueKey('plan_ride_root_$_planRideRevision'),
+        key: const ValueKey('plan_ride_root'),
         isRoot: true,
         initialPickupAddress: homeState.pickupAddress,
-        initialAiSuggestion: _pendingAiSuggestion,
         citySetting: homeState.vehicleTypeResponse?.citySetting,
         rideTypeItems: homeState.rideTypeItems,
       );
@@ -172,7 +175,7 @@ class _MainScreenState extends ConsumerState<MainScreen>
             else
               const SizedBox.shrink(),
             if (_visitedTabs.contains(2))
-              AiAssistantScreen(onContinueInPlanRide: _continueAiTripInPlanRide)
+              AiAssistantScreen(onConfirmRoute: _confirmAiRoute)
             else
               const SizedBox.shrink(),
             if (_visitedTabs.contains(3))

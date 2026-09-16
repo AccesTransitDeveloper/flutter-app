@@ -5,13 +5,14 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../features/ai/ai_models.dart';
+import '../../../features/ai/ai_route_preview.dart';
 import '../../../features/ai/ai_viewmodel.dart';
 import '../../../features/ai/voice_orb.dart';
 
 class AiAssistantScreen extends ConsumerStatefulWidget {
-  final ValueChanged<OrderSuggestion>? onContinueInPlanRide;
+  final ValueChanged<ConfirmedAiRoute>? onConfirmRoute;
 
-  const AiAssistantScreen({super.key, this.onContinueInPlanRide});
+  const AiAssistantScreen({super.key, this.onConfirmRoute});
 
   @override
   ConsumerState<AiAssistantScreen> createState() => _AiAssistantScreenState();
@@ -73,7 +74,7 @@ class _AiAssistantScreenState extends ConsumerState<AiAssistantScreen> {
     return Scaffold(
       backgroundColor: const Color(0xFF071A36),
       appBar: AppBar(
-        automaticallyImplyLeading: widget.onContinueInPlanRide == null,
+        automaticallyImplyLeading: widget.onConfirmRoute == null,
         backgroundColor: const Color(0xFF071A36),
         foregroundColor: Colors.white,
         surfaceTintColor: Colors.transparent,
@@ -133,7 +134,7 @@ class _AiAssistantScreenState extends ConsumerState<AiAssistantScreen> {
       body: SafeArea(
         child: Padding(
           padding: EdgeInsets.only(
-            bottom: widget.onContinueInPlanRide == null ? 0 : 82,
+            bottom: widget.onConfirmRoute == null ? 0 : 82,
           ),
           child: Column(
             children: [
@@ -178,13 +179,18 @@ class _AiAssistantScreenState extends ConsumerState<AiAssistantScreen> {
                 child: ListView.builder(
                   controller: _scroll,
                   padding: const EdgeInsets.fromLTRB(12, 12, 12, 8),
-                  itemCount: state.messages.length,
-                  itemBuilder: (_, index) => _bubble(state.messages[index]),
+                  itemCount:
+                      state.messages.length +
+                      (state.orderSuggestion == null ? 0 : 1),
+                  itemBuilder: (_, index) {
+                    if (index < state.messages.length) {
+                      return _bubble(state.messages[index]);
+                    }
+                    return _orderCard(state.orderSuggestion!);
+                  },
                 ),
               ),
               if (state.isLoading) const _ThinkingBubble(),
-              if (state.orderSuggestion != null)
-                _orderCard(state.orderSuggestion!),
               if (state.error != null)
                 MaterialBanner(
                   content: Text(state.error!),
@@ -366,46 +372,17 @@ class _AiAssistantScreenState extends ConsumerState<AiAssistantScreen> {
   }
 
   Widget _orderCard(OrderSuggestion suggestion) {
-    return Card(
-      color: const Color(0xFF102744),
-      margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'Route ready',
-              style: TextStyle(
-                color: Colors.white,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            if (suggestion.pickup != null)
-              Text(
-                'From: ${suggestion.pickup}',
-                style: const TextStyle(color: Color(0xFFB8C7DE)),
-              ),
-            if (suggestion.destination != null)
-              Text(
-                'To: ${suggestion.destination}',
-                style: const TextStyle(color: Color(0xFFB8C7DE)),
-              ),
-            const SizedBox(height: 6),
-            OutlinedButton(
-              onPressed: () {
-                final onContinue = widget.onContinueInPlanRide;
-                if (onContinue != null) {
-                  onContinue(suggestion);
-                } else {
-                  context.pop<OrderSuggestion>(suggestion);
-                }
-              },
-              child: const Text('Continue in Plan Ride'),
-            ),
-          ],
-        ),
-      ),
+    return AiRoutePreview(
+      key: ValueKey('${suggestion.pickup}|${suggestion.destination}'),
+      suggestion: suggestion,
+      onConfirmed: (route) {
+        final onConfirm = widget.onConfirmRoute;
+        if (onConfirm != null) {
+          onConfirm(route);
+        } else {
+          context.pop<OrderSuggestion>(suggestion);
+        }
+      },
     );
   }
 }

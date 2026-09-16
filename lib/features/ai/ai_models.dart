@@ -1,17 +1,13 @@
+import '../../models/requests/get_vehicle_types_request.dart';
+
 class AiMessage {
   final String text;
   final bool fromUser;
 
-  const AiMessage({
-    required this.text,
-    required this.fromUser,
-  });
+  const AiMessage({required this.text, required this.fromUser});
 
   Map<String, dynamic> toJson() {
-    return {
-      'role': fromUser ? 'user' : 'assistant',
-      'content': text,
-    };
+    return {'role': fromUser ? 'user' : 'assistant', 'content': text};
   }
 }
 
@@ -19,29 +15,31 @@ class OrderSuggestion {
   final String? pickup;
   final String? destination;
 
-  const OrderSuggestion({
-    this.pickup,
-    this.destination,
-  });
+  const OrderSuggestion({this.pickup, this.destination});
 
   factory OrderSuggestion.fromJson(Map<String, dynamic> json) {
     return OrderSuggestion(
       pickup: json['pickup']?.toString() ?? json['pickupAddress']?.toString(),
-      destination: json['dropoff']?.toString() ??
+      destination:
+          json['dropoff']?.toString() ??
           json['destination']?.toString() ??
           json['destinationAddress']?.toString(),
     );
   }
 }
 
+class ConfirmedAiRoute {
+  final DestinationAddress pickup;
+  final DestinationAddress destination;
+
+  const ConfirmedAiRoute({required this.pickup, required this.destination});
+}
+
 class AiReply {
   final String text;
   final OrderSuggestion? orderSuggestion;
 
-  const AiReply({
-    required this.text,
-    this.orderSuggestion,
-  });
+  const AiReply({required this.text, this.orderSuggestion});
 }
 
 class AiAssistantState {
@@ -81,8 +79,9 @@ class AiAssistantState {
       isListening: isListening ?? this.isListening,
       isSpeaking: isSpeaking ?? this.isSpeaking,
       error: clearError ? null : (error ?? this.error),
-      retryMessage:
-          clearRetryMessage ? null : (retryMessage ?? this.retryMessage),
+      retryMessage: clearRetryMessage
+          ? null
+          : (retryMessage ?? this.retryMessage),
       orderSuggestion: clearOrderSuggestion
           ? null
           : (orderSuggestion ?? this.orderSuggestion),

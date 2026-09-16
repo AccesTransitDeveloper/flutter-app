@@ -13,7 +13,6 @@ import '../../../models/requests/get_vehicle_types_request.dart';
 import '../../../models/ride_type_item.dart';
 import '../../../models/responses/booking/get_vehicle_type_response.dart';
 import '../../../core/theme/app_theme.dart';
-import '../../../features/ai/ai_models.dart';
 import '../../../viewmodels/plan_ride_viewmodel.dart';
 import '../../../views/widgets/app_address_input_card.dart';
 import '../../../views/widgets/app_button.dart';
@@ -33,7 +32,6 @@ class PlanRideScreen extends ConsumerStatefulWidget {
   final RideType? rideType;
   final CitySetting? citySetting;
   final String? selectedVehicleTypeId;
-  final OrderSuggestion? initialAiSuggestion;
 
   /// The ride types offered for this city. The picker used to live on the home
   /// screen; it now sits beside the "for me / for other" chip here, so the list
@@ -51,7 +49,6 @@ class PlanRideScreen extends ConsumerStatefulWidget {
     this.rideType,
     this.citySetting,
     this.selectedVehicleTypeId,
-    this.initialAiSuggestion,
     this.rideTypeItems = const [],
     this.isRoot = false,
   });
@@ -192,12 +189,7 @@ class _PlanRideScreenState extends ConsumerState<PlanRideScreen> {
     _destinationFocusNode.addListener(_onDestinationFocusChange);
 
     // If no pickup was passed in, pre-fill it with the current location.
-    if (widget.initialAiSuggestion != null) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted) return;
-        _applyAiSuggestion(widget.initialAiSuggestion!);
-      });
-    } else if (widget.initialPickupAddress == null) {
+    if (widget.initialPickupAddress == null) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
         ref
@@ -208,22 +200,26 @@ class _PlanRideScreenState extends ConsumerState<PlanRideScreen> {
 
     // Mount the map only after the entrance transition has finished so the
     // sheet/route animation stays smooth.
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      final animation = ModalRoute.of(context)?.animation;
-      if (animation == null || animation.isCompleted) {
-        setState(() => _showMap = true);
-        return;
-      }
-      void statusListener(AnimationStatus status) {
-        if (status == AnimationStatus.completed) {
-          animation.removeStatusListener(statusListener);
-          if (mounted) setState(() => _showMap = true);
+    if (widget.isRoot) {
+      _showMap = true;
+    } else {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        final animation = ModalRoute.of(context)?.animation;
+        if (animation == null || animation.isCompleted) {
+          setState(() => _showMap = true);
+          return;
         }
-      }
+        void statusListener(AnimationStatus status) {
+          if (status == AnimationStatus.completed) {
+            animation.removeStatusListener(statusListener);
+            if (mounted) setState(() => _showMap = true);
+          }
+        }
 
-      animation.addStatusListener(statusListener);
-    });
+        animation.addStatusListener(statusListener);
+      });
+    }
   }
 
   void _onPickupFocusChange() {
@@ -347,68 +343,6 @@ class _PlanRideScreenState extends ConsumerState<PlanRideScreen> {
       selectedVehicleTypeId: _selectedVehicleTypeId,
       isDestinationLater: true,
       rideForOtherResult: _rideForOtherResult,
-    );
-  }
-
-  Future<DestinationAddress?> _resolveAiAddress(String? text) async {
-    final query = text?.trim() ?? '';
-    if (query.length < 3) return null;
-    final matches = await _mapManager.searchPlaces(query);
-    for (final match in matches) {
-      if (match.placeId == null) continue;
-      final details = await _mapManager.getPlaceDetails(match.placeId!);
-      if (details?.latitude != null && details?.longitude != null)
-        return details;
-    }
-    return null;
-  }
-
-  Future<void> _handleAiSuggestion() async {
-    final suggestion = await context.navigateToAiAssistant();
-    if (!mounted || suggestion == null) return;
-    await _applyAiSuggestion(suggestion);
-  }
-
-  Future<void> _applyAiSuggestion(OrderSuggestion suggestion) async {
-    DestinationAddress? pickup;
-    DestinationAddress? destination;
-    try {
-      pickup = await _resolveAiAddress(suggestion.pickup);
-      destination = await _resolveAiAddress(suggestion.destination);
-    } catch (_) {
-      // The existing booking form remains usable if the places provider is
-      // temporarily unavailable.
-    }
-    if (!mounted) return;
-    if (pickup == null || destination == null) {
-      final viewModel = ref.read(planRideViewModelProvider(_params).notifier);
-      context.showErrorSnackBar(
-        'We could not verify one of those addresses. '
-        'Please correct it manually.',
-      );
-      if (pickup != null) {
-        viewModel.setPickupFromMap(pickup);
-        _pickupController.text = pickup.address ?? '';
-      } else {
-        viewModel.clearLocation(LocationFocus.pickup);
-        _pickupController.text = suggestion.pickup?.trim() ?? '';
-      }
-      if (destination != null) {
-        viewModel.setDestinationFromMap(destination);
-        _destinationController.text = destination.address ?? '';
-      } else {
-        viewModel.clearLocation(LocationFocus.destination);
-        _destinationController.text = suggestion.destination?.trim() ?? '';
-      }
-      return;
-    }
-    final vm = ref.read(planRideViewModelProvider(_params).notifier);
-    vm.setPickupFromMap(pickup);
-    vm.setDestinationFromMap(destination);
-    _pickupController.text = pickup.address ?? '';
-    _destinationController.text = destination.address ?? '';
-    context.showSnackBar(
-      'Addresses are ready. Choose your time and ride type below.',
     );
   }
 
@@ -926,14 +860,6 @@ class _PlanRideScreenState extends ConsumerState<PlanRideScreen> {
                     icon: Icons.local_taxi_outlined,
                     label: _selectedRideTypeItem?.typeName ?? 'Ride type',
                     onTap: _showRideTypeBottomSheet,
-                  ),
-                ],
-                if (widget.isRoot) ...[
-                  const SizedBox(width: AppDimens.paddingM),
-                  AppChip(
-                    icon: Icons.auto_awesome,
-                    label: 'AT AI',
-                    onTap: _handleAiSuggestion,
                   ),
                 ],
               ],

@@ -30,16 +30,14 @@ import '../models/map_types.dart';
 /// }
 /// ```
 final mapManagerProvider = Provider<MapInterface Function()>((ref) {
-  final sharedPref = ref.read(sharedPreferenceManagerProvider).maybeWhen(
-        data: (data) => data,
-        orElse: () => null,
-      );
+  final sharedPref = ref
+      .read(sharedPreferenceManagerProvider)
+      .maybeWhen(data: (data) => data, orElse: () => null);
 
   final appRepository = ref.read(appRepositoryProvider);
 
-  // Mapbox is forced for every build, matching the native iOS customer app
-  // (`MapType.currentMap` there returns `.mapBox` and never reads the setting).
-  // The server's `setting.mapType` is deliberately ignored.
+  // This customer app uses Mapbox on every platform. Keep provider selection
+  // deterministic so a server setting cannot switch the native map SDK.
   const mapType = MapProviderType.mapbox;
 
   // Return factory function that creates new instance each time
