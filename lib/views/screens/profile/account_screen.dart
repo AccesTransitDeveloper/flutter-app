@@ -217,6 +217,12 @@ class AccountScreen extends ConsumerWidget {
                     title: getString(appStr.headingSetting, 'heading_setting'),
                     onTap: () => context.navigateToSettings(),
                   ),
+                  _AccountMenuItem(
+                    icon: Icons.support_agent_rounded,
+                    title: 'AT Support Chat',
+                    subtitle: 'Chat with a dispatcher',
+                    onTap: () => context.navigateToSupportChat(),
+                  ),
                   const SizedBox(height: AppDimens.paddingXL),
 
                   // App Version (tap to open server switcher)

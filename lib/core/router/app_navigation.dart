@@ -148,6 +148,8 @@ extension AppNavigation on BuildContext {
 
   void navigateToSettings() => push('/settings');
 
+  void navigateToSupportChat() => push('/at-support-chat');
+
   // Wallet, Referral & Redeem
   void navigateToWalletHistory() => push('/wallet-history');
 

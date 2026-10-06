@@ -42,6 +42,8 @@ import '../../views/screens/referral/referral_list_screen.dart';
 import '../../views/screens/support/contact_us_screen.dart';
 import '../../views/screens/support/ticket_detail_screen.dart';
 import '../../views/screens/support/inbox_screen.dart';
+import '../../views/screens/support/support_chat_screen.dart';
+import 'app_route_observer.dart';
 // Booking
 import '../../views/screens/booking/plan_ride_screen.dart';
 import '../../views/screens/booking/add_stops_screen.dart';
@@ -71,6 +73,7 @@ import '../../views/screens/ai/ai_assistant_screen.dart';
 final goRouterProvider = Provider<GoRouter>((ref) {
   return GoRouter(
     initialLocation: '/splash',
+    observers: [routeObserver],
     routes: [
       GoRoute(
         path: '/splash',
@@ -220,6 +223,10 @@ final goRouterProvider = Provider<GoRouter>((ref) {
           final ticket = state.extra as SupportTicketItem;
           return TicketDetailScreen(ticket: ticket);
         },
+      ),
+      GoRoute(
+        path: '/at-support-chat',
+        builder: (context, state) => const SupportChatScreen(),
       ),
       GoRoute(
         path: '/inbox',
