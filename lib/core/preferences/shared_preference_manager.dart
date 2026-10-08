@@ -1,4 +1,5 @@
 import 'dart:convert';
+import '../../features/sos/sos_contract.dart';
 import '../../features/support/support_push.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../constants/shared_preferences_constants.dart';
@@ -110,6 +111,7 @@ class SharedPreferenceManager {
 
   // Clear auth data only
   Future<void> signOut() async {
+    SosSession.onSignOut?.call();
     await removeAuthorization();
     await setLoggedIn(false);
     await setEntity(null);

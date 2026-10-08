@@ -10,6 +10,8 @@ import '../../../core/utils/support_ticket_utils.dart';
 import '../../../data/api/server_config.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../viewmodels/contact_us_viewmodel.dart';
+import '../../../core/providers/app_providers.dart';
+import 'sos_screen.dart';
 import '../../../views/widgets/app_scaffold.dart';
 import '../../../views/widgets/app_text.dart';
 import '../../../views/widgets/app_toolbar.dart';
@@ -53,6 +55,36 @@ class _ContactUsScreenState extends ConsumerState<ContactUsScreen> {
 
             // Sticky header (not scrollable)
             _buildContactHeader(colors, state, viewModel),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: FilledButton.icon(
+                style: FilledButton.styleFrom(
+                  backgroundColor: const Color(0xFFC62828),
+                  minimumSize: const Size.fromHeight(52),
+                ),
+                icon: const Icon(Icons.sos_rounded),
+                label: const Text('SOS — Emergency help'),
+                onPressed: () async {
+                  try {
+                    final preferences = await ref.read(sharedPreferenceManagerProvider.future);
+                    if (!context.mounted) return;
+                    Navigator.of(context).push(MaterialPageRoute(builder: (_) => SosScreen(
+                      preferences: preferences,
+                      callDispatch: () {
+                        final current = ref.read(contactUsViewModelProvider);
+                        if (current.contactPhone == null || current.contactPhone!.isEmpty) {
+                          context.showErrorSnackBar('Dispatch phone is unavailable. Call emergency services if needed.');
+                        } else {
+                          ref.read(contactUsViewModelProvider.notifier).makeCall();
+                        }
+                      },
+                    )));
+                  } catch (_) {
+                    if (context.mounted) context.showErrorSnackBar('Unable to open SOS. Use the Call button for help.');
+                  }
+                },
+              ),
+            ),
 
             // Content (scrollable)
             Expanded(
