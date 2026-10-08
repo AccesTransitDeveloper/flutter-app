@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/providers/app_providers.dart';
@@ -5,13 +6,15 @@ import '../../../core/router/app_route_observer.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../features/support/support_controller.dart';
 import '../../../features/support/support_models.dart';
+import '../../../features/support/support_push.dart';
 import '../../../core/preferences/shared_preference_manager.dart';
 import 'support_composer.dart';
 import 'support_message_widgets.dart';
 
 class SupportChatScreen extends ConsumerStatefulWidget {
   final SupportController Function(SharedPreferenceManager)? controllerFactory;
-  const SupportChatScreen({super.key, this.controllerFactory});
+  final String? initialChatId;
+  const SupportChatScreen({super.key, this.controllerFactory, this.initialChatId});
   @override
   ConsumerState<SupportChatScreen> createState() => _SupportChatScreenState();
 }
@@ -22,11 +25,17 @@ class _SupportChatScreenState extends ConsumerState<SupportChatScreen> with Widg
   String? _fatal;
   bool _subscribed = false, _foreground = true, _covered = false;
   int _ackSeq = 0, _ackScheduled = 0;
+  StreamSubscription<SupportPush>? _pushSubscription;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    _pushSubscription = SupportPushHub.instance.updates.listen((push) {
+      final c = _c;
+      if (c != null && c.accountId == push.ownerId && c.selectedChat?.id == push.chatId &&
+          _foreground && !_covered) { c.refresh(); }
+    });
     _boot();
   }
 
@@ -39,15 +48,26 @@ class _SupportChatScreenState extends ConsumerState<SupportChatScreen> with Widg
       c.addListener(_onChange);
       setState(() { _c = c; _cache = SupportImageCache(c.api); });
       await c.initialize();
+      if (widget.initialChatId != null) await c.openPushChat(widget.initialChatId!);
       _syncPolling();
     } catch (e) {
       if (mounted) setState(() => _fatal = e is Exception ? e.toString() : 'Could not open Support Chat.');
     }
   }
 
-  void _onChange() { if (mounted) setState(() {}); }
+  void _onChange() { if (mounted) { _syncVisibility(); setState(() {}); } }
+
+  void _syncVisibility() {
+    final c = _c, hub = SupportPushHub.instance;
+    if (_foreground && !_covered && c?.conversationOpen == true) {
+      hub.visibleOwnerId = c!.accountId; hub.visibleChatId = c.selectedChat?.id;
+    } else if (hub.visibleOwnerId == c?.accountId) {
+      hub.visibleOwnerId = null; hub.visibleChatId = null;
+    }
+  }
 
   void _syncPolling() {
+    _syncVisibility();
     final c = _c;
     if (c == null) return;
     (_foreground && !_covered) ? c.startPolling() : c.stopPolling();
@@ -71,6 +91,8 @@ class _SupportChatScreenState extends ConsumerState<SupportChatScreen> with Widg
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     routeObserver.unsubscribe(this);
+    _pushSubscription?.cancel();
+    _covered = true; _syncVisibility();
     _c?.removeListener(_onChange);
     _c?.dispose();
     super.dispose();

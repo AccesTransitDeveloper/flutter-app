@@ -226,7 +226,7 @@ final goRouterProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(
         path: '/at-support-chat',
-        builder: (context, state) => const SupportChatScreen(),
+        builder: (context, state) => SupportChatScreen(initialChatId: state.uri.queryParameters['chatId']),
       ),
       GoRoute(
         path: '/inbox',

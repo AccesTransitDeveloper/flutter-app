@@ -1,4 +1,5 @@
 import 'dart:convert';
+import '../../features/support/support_push.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../constants/shared_preferences_constants.dart';
 import '../../data/api/server_environment.dart';
@@ -112,6 +113,7 @@ class SharedPreferenceManager {
     await removeAuthorization();
     await setLoggedIn(false);
     await setEntity(null);
+    await SupportPushHub.instance.signedOut();
   }
 
   // Entity

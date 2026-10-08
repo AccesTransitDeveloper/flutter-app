@@ -1,4 +1,7 @@
 import 'dart:io';
+import 'package:shared_preferences/shared_preferences.dart';
+import '../preferences/shared_preference_manager.dart';
+import '../../features/support/support_push.dart';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
@@ -14,6 +17,13 @@ import 'permission_manager.dart';
 /// Background message handler - must be top-level function
 @pragma('vm:entry-point')
 Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
+  if (message.data['type'] == 'AT_SUPPORT_REPLY') {
+    // APNs already displayed alert payloads; do not make a second local banner.
+    if (message.notification != null) return;
+    await NotificationManager.instance.initializeSupportBackground();
+    await NotificationManager.instance.showNotificationFromMessage(message);
+    return;
+  }
   debugPrint('🔔 Background message: ${message.messageId}');
   debugPrint('🔔 Background message data: ${message.data}');
 
@@ -55,9 +65,15 @@ class NotificationManager {
 
   String? _fcmToken;
   String? _apnsToken;
+  Future<void> _supportWork = Future<void>.value();
 
   /// Callback for when FCM token is refreshed
   void Function(String token)? onTokenRefreshed;
+  Future<String?> refreshDeviceToken() => _getToken();
+  Future<void> initializeSupportBackground() async {
+    await _initLocalNotifications();
+    await _createNotificationChannels();
+  }
 
   /// Callback for when a notification is tapped
   void Function(Map<String, dynamic> data)? onNotificationTapped;
@@ -70,6 +86,13 @@ class NotificationManager {
 
   /// Initialize notification manager
   Future<void> init() async {
+    SupportPushHub.instance.onSignOut = () async {
+      // Stop callbacks before deleting the token; a refresh cannot reattach it
+      // to the account that has just signed out.
+      onTokenRefreshed = null;
+      await cancelAllNotifications();
+      try { await deleteToken(); } catch (_) { _fcmToken = null; }
+    };
     // Initialize local notifications
     await _initLocalNotifications();
 
@@ -84,18 +107,18 @@ class NotificationManager {
 
     // Listen to token refresh
     _messaging.onTokenRefresh.listen((token) {
-      debugPrint('🔔 FCM Token refreshed: $token');
+      debugPrint('FCM token refreshed');
       _fcmToken = token;
       _onTokenRefresh(token);
     });
 
-    // iOS: Let iOS display notifications natively in foreground
-    // (matches native app's willPresent: .banner, .sound, .badge)
+    // Foreground banners are rendered locally, including normal ride pushes.
+    // This lets the visible support thread refresh without a duplicate banner.
     if (Platform.isIOS) {
       await _messaging.setForegroundNotificationPresentationOptions(
-        alert: true,
+        alert: false,
         badge: true,
-        sound: true,
+        sound: false,
       );
     }
 
@@ -130,6 +153,10 @@ class NotificationManager {
       initSettings,
       onDidReceiveNotificationResponse: _onNotificationTapped,
     );
+    final launch = await _localNotifications.getNotificationAppLaunchDetails();
+    if (launch?.didNotificationLaunchApp == true && launch?.notificationResponse != null) {
+      _onNotificationTapped(launch!.notificationResponse!);
+    }
   }
 
   /// Create notification channels for Android
@@ -258,14 +285,14 @@ class NotificationManager {
         final apnsToken = await _messaging.getAPNSToken();
         if (apnsToken != null) {
           _apnsToken = apnsToken;
-          debugPrint('🔔 [iOS] APNS Token: $_apnsToken');
+          debugPrint('APNs registration retrieved');
         } else {
           debugPrint('🔔 [iOS] APNS not ready yet');
         }
       }
 
       _fcmToken = await _messaging.getToken();
-      debugPrint('🔔 FCM Token: $_fcmToken');
+      debugPrint('FCM registration retrieved');
       return _fcmToken;
     } catch (e, stackTrace) {
       debugPrint('🔔 ❌ Error getting FCM token: $e');
@@ -276,13 +303,17 @@ class NotificationManager {
 
   /// Handle token refresh - this is the reliable way to get FCM token on iOS
   void _onTokenRefresh(String token) {
-    debugPrint('🔔 [onTokenRefresh] FCM Token received: $token');
+    debugPrint('FCM registration refreshed');
     _fcmToken = token;
     onTokenRefreshed?.call(token);
   }
 
   /// Handle foreground messages
   void _handleForegroundMessage(RemoteMessage message) {
+    if (message.data['type'] == 'AT_SUPPORT_REPLY') {
+      showNotificationFromMessage(message);
+      return;
+    }
     debugPrint('🔔 Foreground message received:');
     debugPrint('🔔 Data: ${message.data}');
 
@@ -290,21 +321,18 @@ class NotificationManager {
     // notification is tapped, so an approval applies while the app is open.
     _processNotificationAction(message.data);
 
-    if (Platform.isIOS) {
-      // iOS: Notification with payload is displayed natively via
-      // setForegroundNotificationPresentationOptions (banner + sound + badge).
-      // Only show local notification for data-only messages.
-      if (message.notification == null) {
-        showNotificationFromMessage(message);
-      }
-    } else {
-      // Android: Always show local notification (Android doesn't auto-display in foreground)
-      showNotificationFromMessage(message);
-    }
+    // Both platforms render foreground notifications locally. This preserves
+    // ride banners while allowing only the visible support thread to be silent.
+    showNotificationFromMessage(message);
   }
 
   /// Handle notification tap (when app opens from notification)
   void _handleNotificationTap(RemoteMessage message) {
+    if (message.data['type'] == 'AT_SUPPORT_REPLY') {
+      final push = SupportPush.parse(message.data);
+      if (push != null) SupportPushHub.instance.tapped(push);
+      return;
+    }
     debugPrint('🔔 Notification tapped:');
     debugPrint('🔔 Data: ${message.data}');
 
@@ -314,12 +342,42 @@ class NotificationManager {
 
   /// Handle local notification tap
   void _onNotificationTapped(NotificationResponse response) {
+    final support = SupportPush.fromPayload(response.payload);
+    if (support != null) { SupportPushHub.instance.tapped(support); return; }
     debugPrint('🔔 Local notification tapped: ${response.payload}');
     onNotificationTapped?.call({'payload': response.payload});
   }
 
   /// Show notification from FCM message
   Future<void> showNotificationFromMessage(RemoteMessage message) async {
+    if (message.data['type'] == 'AT_SUPPORT_REPLY') {
+      _supportWork = _supportWork.catchError((_) {}).then((_) => _showSupportReply(message));
+      await _supportWork;
+      return;
+    }
+    await _showRegularMessage(message);
+  }
+
+  Future<void> _showSupportReply(RemoteMessage message) async {
+      final push = SupportPush.parse(message.data);
+      if (push == null) return;
+      final storage = await SharedPreferences.getInstance();
+      await storage.reload(); // Background isolate must not reuse stale login.
+      final prefs = SharedPreferenceManager(storage);
+      if (prefs.getEntity()?.id.toString() != push.ownerId || !prefs.isLoggedIn()) return;
+      SupportPushHub.instance.received(push);
+      final key = 'at_support_push_seen:${push.ownerId}';
+      final seen = storage.getStringList(key) ?? <String>[];
+      if (seen.contains(push.eventId)) return;
+      seen.add(push.eventId);
+      if (seen.length > 200) seen.removeRange(0, seen.length - 200);
+      await storage.setStringList(key, seen);
+      if (SupportPushHub.instance.isVisible(push)) return;
+      await showNotification(title: 'AT Support Chat', body: 'You have a new support reply.',
+        payload: push.payload, id: push.notificationId);
+  }
+
+  Future<void> _showRegularMessage(RemoteMessage message) async {
     debugPrint('🔔 [showNotificationFromMessage] Processing message...');
     debugPrint('🔔 [showNotificationFromMessage] Message ID: ${message.messageId}');
     debugPrint('🔔 [showNotificationFromMessage] Data: ${message.data}');
@@ -386,6 +444,7 @@ class NotificationManager {
     String? imageUrl,
     String? payload,
     bool isHighPriority = false,
+    int? id,
   }) async {
     // Determine if we should play default sound or custom
     final bool hasCustomSound = sound != null && sound.isNotEmpty && sound != 'default' && sound != 'null';
@@ -446,7 +505,7 @@ class NotificationManager {
     );
 
     // Generate unique notification ID
-    final notificationId = DateTime.now().millisecondsSinceEpoch.hashCode;
+    final notificationId = id ?? DateTime.now().millisecondsSinceEpoch.hashCode;
 
     debugPrint('🔔 [showNotification] Showing notification ID: $notificationId');
     debugPrint('🔔 [showNotification] Title: $title, Body: $body');

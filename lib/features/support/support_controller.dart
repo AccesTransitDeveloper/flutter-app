@@ -26,6 +26,7 @@ class SupportController extends ChangeNotifier {
   final SharedPreferenceManager preferences;
   late final SupportApi api;
   late final String _accountId;
+  late final String? _session;
   late final SharedPreferences _storage;
   List<SupportChat> chats = [];
   SupportChat? selectedChat;
@@ -41,16 +42,19 @@ class SupportController extends ChangeNotifier {
   int _generation = 0, _readSequence = 0;
   Future<void> _writes = Future.value();
   bool get locked => sending || _pendingId != null;
+  String get accountId => _accountId;
   String get _draftKey => 'at_support_draft:${Uri.encodeComponent(_accountId)}:${selectedChat?.id ?? 'new'}';
   SupportController(this.preferences, {SupportApi? supportApi}) {
     final id = preferences.getEntity()?.id;
     if (id == null || id.toString().isEmpty) throw const SupportApiException('Sign in to the customer app first.', 401);
     _accountId = id.toString();
+    _session = preferences.getAuthorization();
     api = supportApi ?? SupportApi(preferences);
   }
   void _notify() { if (!_disposed) notifyListeners(); }
   void _identity() {
-    if (preferences.getEntity()?.id.toString() != _accountId) throw const SupportApiException('Your account changed. Reopen Support Chat.', 401);
+    if (preferences.getEntity()?.id.toString() != _accountId || preferences.getAuthorization() != _session)
+      throw const SupportApiException('Your account changed. Reopen Support Chat.', 401);
   }
   Future<void> initialize() async {
     _storage = await SharedPreferences.getInstance();
@@ -71,6 +75,7 @@ class SupportController extends ChangeNotifier {
       _identity();
       if (conversationOpen && selectedChat != null) {
         final next = await api.get(selectedChat!.id);
+        _identity();
         if (_disposed || generation != _generation) return;
         selectedChat = next;
         // A long background pause can leave a gap between two latest-100 windows.
@@ -85,6 +90,7 @@ class SupportController extends ChangeNotifier {
         hasMoreMessages = next.hasMoreMessages && messages.length <= 100 ? true : hasMoreMessages;
       } else if (!conversationOpen) {
         final next = await api.list();
+        _identity();
         if (_disposed || generation != _generation) return;
         chats = next;
       }
@@ -106,11 +112,28 @@ class SupportController extends ChangeNotifier {
       try {
         _identity();
         final detail = await api.get(chat.id);
+        _identity();
         if (_disposed || generation != _generation) return;
         selectedChat = detail; messages = detail.messages; hasMoreMessages = detail.hasMoreMessages; error = null;
       } catch (e) { if (generation == _generation) error = _errorText(e); }
       finally { loading = false; _notify(); }
     }
+  }
+  Future<void> openPushChat(String id) async {
+    if (!ready || _disposed || sending) return;
+    try {
+      _identity();
+      final detail = await api.get(id);
+      _identity();
+      if (_disposed) return;
+      if (['closed', 'resolved'].contains(detail.status)) {
+        error = 'This conversation is closed. You can open a new Support Chat.';
+        _notify(); return;
+      }
+      // Do not install a payload-supplied ID or restore its draft before ACL
+      // verification. Switching threads saves the current draft first.
+      await openChat(detail);
+    } catch (e) { error = _errorText(e); _notify(); }
   }
   Future<void> backToList() async {
     if (sending) return;

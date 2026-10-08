@@ -5,6 +5,9 @@ import '../core/constants/socket_constants.dart';
 import '../core/managers/live_activity_manager.dart';
 import '../core/constants/app_constants.dart';
 import '../core/managers/notification_manager.dart';
+import '../core/router/app_router.dart';
+import '../features/support/support_api.dart';
+import '../features/support/support_push.dart';
 import 'home_viewmodel.dart';
 import '../core/managers/socket_manager.dart';
 import '../core/preferences/shared_preference_manager.dart';
@@ -73,9 +76,10 @@ class MainViewModel extends StateNotifier<MainState> {
 
   /// Register notification callbacks
   void _registerNotificationCallbacks() {
+    SupportPushHub.instance.onTap = _openSupportReply;
     // Send refreshed FCM token to backend
     NotificationManager.instance.onTokenRefreshed = (token) {
-      debugPrint('📱 FCM token refreshed, sending to server: $token');
+      debugPrint('FCM token refreshed; updating device registration');
       final request = FirebaseDeviceTokenRequest(deviceToken: token);
       _appRepository.updateDeviceToken(request);
     };
@@ -108,6 +112,35 @@ class MainViewModel extends StateNotifier<MainState> {
     };
   }
 
+  Future<void> _openSupportReply(SupportPush push) async {
+    final owner = _sharedPref.getEntity()?.id.toString();
+    final session = _sharedPref.getAuthorization();
+    if (!mounted || !_sharedPref.isLoggedIn() || owner != push.ownerId) return;
+    final api = SupportApi(_sharedPref);
+    try {
+      final chat = await api.get(push.chatId);
+      if (!mounted || _sharedPref.getEntity()?.id.toString() != owner ||
+          _sharedPref.getAuthorization() != session ||
+          !_sharedPref.isLoggedIn() || ['closed', 'resolved'].contains(chat.status)) return;
+      final router = _ref.read(goRouterProvider);
+      await router.push('/at-support-chat?chatId=${Uri.encodeComponent(chat.id)}');
+    } on SupportApiException catch (_) {
+      // Ownership and availability are rechecked on the server. Never navigate
+      // on a missing/foreign/closed thread or use cached notification text.
+    } catch (_) {
+      // A failed network request does not open an unverified conversation.
+    } finally { api.close(); }
+  }
+
+  @override
+  void dispose() {
+    SupportPushHub.instance.onTap = null;
+    NotificationManager.instance.onTokenRefreshed = null;
+    NotificationManager.instance.onNotificationTapped = null;
+    NotificationManager.instance.onEntityStatusChanged = null;
+    super.dispose();
+  }
+
   /// Connect to socket and emit SIGN_UP event
   void _connectSocket() {
     _socketManager.connect(onConnected: () {
@@ -138,6 +171,10 @@ class MainViewModel extends StateNotifier<MainState> {
 
   /// Called when app resumes or when switching to home tab
   Future<void> refreshEntityDetail() async {
+    // MainViewModel is retained by Riverpod across sign-out. Reattach handlers
+    // after returning to the authenticated home screen, not only in constructor.
+    _registerNotificationCallbacks();
+    _updateDeviceToken();
     debugPrint('📱 refreshEntityDetail called');
     await _fetchEntityDetail();
   }
@@ -238,6 +275,9 @@ class MainViewModel extends StateNotifier<MainState> {
   /// Update device FCM token to server
   Future<void> _updateDeviceToken() async {
     String? fcmToken = NotificationManager.instance.fcmToken;
+    if (fcmToken == null || fcmToken.isEmpty) {
+      fcmToken = await NotificationManager.instance.refreshDeviceToken();
+    }
 
     // If token not available yet, wait and retry (especially for iOS)
     if (fcmToken == null || fcmToken.isEmpty) {
@@ -257,7 +297,7 @@ class MainViewModel extends StateNotifier<MainState> {
       return;
     }
 
-    debugPrint('📱 Updating device token to server: $fcmToken');
+    debugPrint('Updating device token registration');
     final request = FirebaseDeviceTokenRequest(deviceToken: fcmToken);
     final response = await _appRepository.updateDeviceToken(request);
 
