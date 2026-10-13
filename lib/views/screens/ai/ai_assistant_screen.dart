@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../features/ai/ai_models.dart';
+import '../../../features/ai/ai_quick_prompts.dart';
 import '../../../features/ai/ai_route_preview.dart';
 import '../../../features/ai/ai_viewmodel.dart';
 import '../../../features/ai/voice_orb.dart';
@@ -22,6 +23,13 @@ class _AiAssistantScreenState extends ConsumerState<AiAssistantScreen> {
   final _input = TextEditingController();
   final _scroll = ScrollController();
   String _languageCode = 'en';
+  bool _showSuggestions = false;
+  int _lastItemCount = 0;
+  bool _lastLoading = false;
+
+  /// Actual nav: 24px icon + 20px item padding + 16px container padding,
+  /// with 6px top margin and max(system inset, 12px) bottom margin.
+  static const double _navBarFootprint = 66;
 
   static const _languages = <_AiLanguage>[
     _AiLanguage('en', 'EN', 'English', 'Message'),
@@ -45,24 +53,70 @@ class _AiAssistantScreenState extends ConsumerState<AiAssistantScreen> {
   }
 
   void _send() {
+    final state = ref.read(aiAssistantProvider);
+    if (state.isLoading || state.isListening || _input.text.trim().isEmpty) {
+      return;
+    }
     final text = _input.text;
     _input.clear();
+    setState(() => _showSuggestions = false);
     ref.read(aiAssistantProvider.notifier).send(text);
+    _scrollToBottom(force: true);
+  }
+
+  void _sendPrompt(AiQuickPrompt prompt) {
+    setState(() => _showSuggestions = false);
+    ref.read(aiAssistantProvider.notifier).send(prompt.message);
+    _scrollToBottom(force: true);
+  }
+
+  bool get _nearBottom {
+    if (!_scroll.hasClients) return true;
+    final p = _scroll.position;
+    return p.maxScrollExtent - p.pixels < 120;
+  }
+
+  void _scrollToBottom({bool force = false}) {
+    final wasNear = _nearBottom;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !_scroll.hasClients) return;
+      if (!force && !wasNear) return;
+      _scroll.animateTo(
+        _scroll.position.maxScrollExtent,
+        duration: const Duration(milliseconds: 220),
+        curve: Curves.easeOut,
+      );
+    });
   }
 
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(aiAssistantProvider);
     final viewModel = ref.read(aiAssistantProvider.notifier);
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (_scroll.hasClients) {
-        _scroll.animateTo(
-          _scroll.position.maxScrollExtent,
-          duration: const Duration(milliseconds: 200),
-          curve: Curves.easeOut,
-        );
-      }
-    });
+    final hasUserMessage = state.messages.any((m) => m.fromUser);
+    final showPrompts = !hasUserMessage || _showSuggestions;
+    final itemCount =
+        state.messages.length + (state.orderSuggestion == null ? 0 : 1);
+    // Follow new content only when the reader is already near the bottom;
+    // typing and unrelated rebuilds never move the list.
+    if (itemCount != _lastItemCount || state.isLoading != _lastLoading) {
+      final grew =
+          itemCount > _lastItemCount || (state.isLoading && !_lastLoading);
+      _lastItemCount = itemCount;
+      _lastLoading = state.isLoading;
+      if (grew) _scrollToBottom();
+    }
+    final media = MediaQuery.of(context);
+    final keyboardOpen = media.viewInsets.bottom > 0;
+    final compact = keyboardOpen || media.size.height < 640;
+    final isTab = widget.onConfirmRoute != null;
+    // Reserve the floating nav footprint plus the system inset exactly once
+    // (SafeArea bottom is disabled). With the keyboard up the nav is covered.
+    final bottomReserve = keyboardOpen
+        ? 6.0
+        : isTab
+        ? _navBarFootprint + math.max(media.viewPadding.bottom, 12.0) + 4
+        : media.viewPadding.bottom + 4;
     final mode = state.isListening
         ? VoiceOrbMode.listening
         : state.isLoading
@@ -72,6 +126,9 @@ class _AiAssistantScreenState extends ConsumerState<AiAssistantScreen> {
         : VoiceOrbMode.idle;
 
     return Scaffold(
+      // MainScreen already resizes its tab body for the keyboard. Do not
+      // subtract the same keyboard height a second time in this nested Scaffold.
+      resizeToAvoidBottomInset: !isTab,
       backgroundColor: const Color(0xFF071A36),
       appBar: AppBar(
         automaticallyImplyLeading: widget.onConfirmRoute == null,
@@ -132,61 +189,97 @@ class _AiAssistantScreenState extends ConsumerState<AiAssistantScreen> {
         ],
       ),
       body: SafeArea(
+        bottom: false,
         child: Padding(
-          padding: EdgeInsets.only(
-            bottom: widget.onConfirmRoute == null ? 0 : 82,
-          ),
+          padding: EdgeInsets.only(bottom: bottomReserve),
           child: Column(
             children: [
-              const Padding(
-                padding: EdgeInsets.only(top: 4),
-                child: Text(
-                  'Travel & ride assistant',
-                  style: TextStyle(
-                    color: Color(0xFF93A8C7),
-                    fontWeight: FontWeight.w600,
-                  ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 2, 16, 2),
+                child: Row(
+                  children: [
+                    VoiceOrb(mode: mode, size: compact ? 40 : 64),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          AnimatedSwitcher(
+                            duration: const Duration(milliseconds: 220),
+                            child: Text(
+                              _statusText(state),
+                              key: ValueKey(mode),
+                              style: const TextStyle(
+                                color: Color(0xFFE2E8F0),
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ),
+                          Text(
+                            'Travel & ride assistant - ${_selectedLanguage.name}',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              color: Color(0xFF93A8C7),
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    if (state.isSpeaking)
+                      IconButton(
+                        onPressed: viewModel.stopPlayback,
+                        tooltip: 'Stop playback',
+                        color: Colors.white,
+                        icon: const Icon(Icons.stop_circle_outlined),
+                      )
+                    else if (hasUserMessage)
+                      TextButton.icon(
+                        onPressed: () {
+                          setState(() => _showSuggestions = !_showSuggestions);
+                          if (_showSuggestions) _scrollToBottom(force: true);
+                        },
+                        style: TextButton.styleFrom(
+                          foregroundColor: const Color(0xFF7DD3FC),
+                          visualDensity: VisualDensity.compact,
+                        ),
+                        icon: Icon(
+                          _showSuggestions
+                              ? Icons.close_rounded
+                              : Icons.lightbulb_outline_rounded,
+                          size: 18,
+                        ),
+                        label: const Text('Suggestions'),
+                      ),
+                  ],
                 ),
               ),
-              const SizedBox(height: 4),
-              VoiceOrb(mode: mode, size: 126),
-              AnimatedSwitcher(
-                duration: const Duration(milliseconds: 220),
-                child: Text(
-                  _statusText(state),
-                  key: ValueKey(mode),
-                  style: const TextStyle(
-                    color: Color(0xFFB8C7DE),
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
-              Text(
-                _selectedLanguage.name,
-                style: const TextStyle(
-                  color: Color(0xFF38BDF8),
-                  fontSize: 12,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-              if (state.isSpeaking)
-                TextButton.icon(
-                  onPressed: viewModel.stopPlayback,
-                  icon: const Icon(Icons.stop),
-                  label: const Text('Stop playback'),
-                ),
               Expanded(
                 child: ListView.builder(
                   controller: _scroll,
-                  padding: const EdgeInsets.fromLTRB(12, 12, 12, 8),
-                  itemCount:
-                      state.messages.length +
-                      (state.orderSuggestion == null ? 0 : 1),
+                  keyboardDismissBehavior:
+                      ScrollViewKeyboardDismissBehavior.onDrag,
+                  padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
+                  itemCount: itemCount + (showPrompts ? 1 : 0),
                   itemBuilder: (_, index) {
                     if (index < state.messages.length) {
                       return _bubble(state.messages[index]);
                     }
-                    return _orderCard(state.orderSuggestion!);
+                    if (state.orderSuggestion != null &&
+                        index == state.messages.length) {
+                      return _orderCard(state.orderSuggestion!);
+                    }
+                    return Padding(
+                      padding: const EdgeInsets.only(top: 10, bottom: 4),
+                      child: AiQuickPromptGrid(
+                        onSelected: state.isLoading || state.isListening
+                            ? null
+                            : _sendPrompt,
+                      ),
+                    );
                   },
                 ),
               ),
@@ -209,7 +302,7 @@ class _AiAssistantScreenState extends ConsumerState<AiAssistantScreen> {
                   ],
                 ),
               Padding(
-                padding: const EdgeInsets.fromLTRB(10, 8, 10, 10),
+                padding: const EdgeInsets.fromLTRB(10, 4, 10, 4),
                 child: Row(
                   children: [
                     Expanded(
@@ -238,7 +331,7 @@ class _AiAssistantScreenState extends ConsumerState<AiAssistantScreen> {
                             hintText: _selectedLanguage.messageHint,
                             hintStyle: const TextStyle(
                               color: Color(0xFF8294AF),
-                              fontSize: 18,
+                              fontSize: 16,
                             ),
                             border: InputBorder.none,
                             contentPadding: const EdgeInsets.symmetric(
@@ -329,7 +422,7 @@ class _AiAssistantScreenState extends ConsumerState<AiAssistantScreen> {
             child: Container(
               margin: const EdgeInsets.symmetric(vertical: 5),
               padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 11),
-              constraints: const BoxConstraints(maxWidth: 310),
+              constraints: const BoxConstraints(maxWidth: 340),
               decoration: BoxDecoration(
                 gradient: message.fromUser
                     ? const LinearGradient(
@@ -353,9 +446,13 @@ class _AiAssistantScreenState extends ConsumerState<AiAssistantScreen> {
                   ),
                 ],
               ),
-              child: Text(
+              child: SelectableText(
                 message.text,
-                style: const TextStyle(color: Colors.white, height: 1.35),
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 15,
+                  height: 1.42,
+                ),
               ),
             ),
           ),

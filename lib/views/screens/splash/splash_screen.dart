@@ -90,7 +90,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
           ref.read(splashViewModelProvider.notifier).onSplashAnimationCompleted();
         },
         onError: () {
-          if (mounted) context.showErrorSnackBar('Startup animation could not play. Continuing app initialization.');
+          if (mounted) context.showErrorSnackBar('Startup animation could not play. Tap Retry to try again.');
         },
       );
     }

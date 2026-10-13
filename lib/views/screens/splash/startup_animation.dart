@@ -1,12 +1,16 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 
-/// Offline, single-play intro. Playback time starts with the first visible
-/// frame, not with the network request or asset decode.
+import 'startup_video_html.dart';
+
+/// Uses the already installed native WebView's H.264 player. The bundled MP4
+/// is the user's original file, not resized or recompressed.
 class StartupAnimation extends StatefulWidget {
-  static const asset = 'assets/animations/at_startup.webp';
-  static const duration = Duration(seconds: 6);
+  static const asset = 'assets/animations/at_startup.mp4';
   final VoidCallback onCompleted;
   final VoidCallback onError;
 
@@ -21,94 +25,102 @@ class StartupAnimation extends StatefulWidget {
 }
 
 class _StartupAnimationState extends State<StartupAnimation>
-    with SingleTickerProviderStateMixin, WidgetsBindingObserver {
-  late final AnimationController _playback;
-  Timer? _decodeTimer;
-  bool _started = false;
-  bool _firstFrameScheduled = false;
-  bool _finished = false;
+    with WidgetsBindingObserver {
+  InAppWebViewController? _controller;
+  String? _html;
+  bool _failed = false;
+  bool _completed = false;
   bool _foreground = true;
+  int _generation = 0;
 
   @override
   void initState() {
     super.initState();
-    _playback = AnimationController(vsync: this, duration: StartupAnimation.duration)
-      ..addStatusListener((status) {
-        if (status == AnimationStatus.completed) _finish();
-      });
     WidgetsBinding.instance.addObserver(this);
     _foreground = WidgetsBinding.instance.lifecycleState == null ||
         WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed;
-    // A missing/corrupt asset must not permanently block sign-in.
-    _decodeTimer = Timer(const Duration(seconds: 8), () => _finish(failed: true));
+    _load();
   }
 
-  void _firstFrame() {
-    if (!mounted || _started || _finished) return;
-    _started = true;
-    _decodeTimer?.cancel();
-    _resume();
+  Future<void> _load() async {
+    final generation = ++_generation;
+    setState(() { _failed = false; _html = null; _controller = null; });
+    try {
+      final bytes = await rootBundle.load(StartupAnimation.asset)
+          .timeout(const Duration(seconds: 10));
+      final original = bytes.buffer.asUint8List(bytes.offsetInBytes, bytes.lengthInBytes);
+      final html = startupVideoHtml(base64Encode(original));
+      if (mounted && generation == _generation) setState(() => _html = html);
+    } catch (_) { _fail(generation); }
   }
 
-  void _resume() {
-    if (!_foreground || !_started || _finished) return;
-    if (_playback.isCompleted) {
-      _finish();
-      return;
-    }
-    _playback.forward();
+  void _fail(int generation) {
+    if (!mounted || _completed || _failed || generation != _generation) return;
+    setState(() => _failed = true);
+    widget.onError();
+    // A playback failure is never treated as six seconds of completed video.
   }
 
-  void _finish({bool failed = false}) {
-    if (!mounted || _finished) return;
-    _finished = true;
-    _playback.stop();
-    _decodeTimer?.cancel();
-    if (failed) widget.onError();
+  void _ended(int generation, List<dynamic> arguments) {
+    if (!mounted || _completed || _failed || generation != _generation ||
+        arguments.length != 2 || !startupVideoFinished(arguments[0], arguments[1])) return;
+    _completed = true;
     widget.onCompleted();
+  }
+
+  Future<void> _syncPlayback(int generation) async {
+    if (_controller == null || _completed || _failed) return;
+    try {
+      await _controller!.evaluateJavascript(source:
+          _foreground
+              ? 'if(window.atStartupResume) window.atStartupResume();'
+              : 'if(window.atStartupPause) window.atStartupPause();');
+    } catch (_) { _fail(generation); }
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    final foreground = state == AppLifecycleState.resumed;
-    if (_foreground == foreground) return;
-    setState(() => _foreground = foreground);
-    if (foreground) {
-      _resume();
-    } else {
-      _playback.stop();
-    }
+    _foreground = state == AppLifecycleState.resumed;
+    unawaited(_syncPlayback(_generation));
   }
 
   @override
   Widget build(BuildContext context) {
-    return TickerMode(
-      enabled: _foreground,
-      child: SizedBox.expand(
-        child: Image.asset(
-          StartupAnimation.asset,
-          fit: BoxFit.contain,
-          semanticLabel: 'Accessible Transit startup animation',
-          frameBuilder: (context, child, frame, synchronous) {
-            if (frame != null && !_firstFrameScheduled) {
-              _firstFrameScheduled = true;
-              WidgetsBinding.instance.addPostFrameCallback((_) => _firstFrame());
-            }
-            return child;
-          },
-          errorBuilder: (context, error, stackTrace) {
-            WidgetsBinding.instance.addPostFrameCallback((_) => _finish(failed: true));
-            return const Center(child: CircularProgressIndicator());
-          },
-        ),
+    if (_failed) {
+      return Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
+        const Text('Startup video could not play.'),
+        const SizedBox(height: 12),
+        FilledButton(onPressed: _load, child: const Text('Retry animation')),
+      ]));
+    }
+    if (_html == null) return const Center(child: CircularProgressIndicator());
+    final generation = _generation;
+    return SizedBox.expand(child: InAppWebView(
+      key: ValueKey(generation),
+      initialData: InAppWebViewInitialData(data: _html!),
+      initialSettings: InAppWebViewSettings(
+        javaScriptEnabled: true,
+        mediaPlaybackRequiresUserGesture: false,
+        allowsInlineMediaPlayback: true,
+        disableHorizontalScroll: true,
+        disableVerticalScroll: true,
+        supportZoom: false,
+        transparentBackground: true,
       ),
-    );
+      onWebViewCreated: (controller) {
+        _controller = controller;
+        controller.addJavaScriptHandler(handlerName: 'startupVideoEnded',
+            callback: (arguments) { _ended(generation, arguments); return null; });
+        controller.addJavaScriptHandler(handlerName: 'startupVideoError',
+            callback: (_) { _fail(generation); return null; });
+      },
+      onLoadStop: (_, __) => _syncPlayback(generation),
+    ));
   }
 
   @override
   void dispose() {
-    _playback.dispose();
-    _decodeTimer?.cancel();
+    _generation++;
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
