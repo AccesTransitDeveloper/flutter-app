@@ -70,14 +70,6 @@ class _ContactUsScreenState extends ConsumerState<ContactUsScreen> {
                     if (!context.mounted) return;
                     Navigator.of(context).push(MaterialPageRoute(builder: (_) => SosScreen(
                       preferences: preferences,
-                      callDispatch: () {
-                        final current = ref.read(contactUsViewModelProvider);
-                        if (current.contactPhone == null || current.contactPhone!.isEmpty) {
-                          context.showErrorSnackBar('Dispatch phone is unavailable. Call emergency services if needed.');
-                        } else {
-                          ref.read(contactUsViewModelProvider.notifier).makeCall();
-                        }
-                      },
                     )));
                   } catch (_) {
                     if (context.mounted) context.showErrorSnackBar('Unable to open SOS. Use the Call button for help.');

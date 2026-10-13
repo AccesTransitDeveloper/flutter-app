@@ -8,8 +8,7 @@ import '../../../features/sos/sos_service.dart';
 
 class SosScreen extends StatefulWidget {
   final SharedPreferenceManager preferences;
-  final VoidCallback callDispatch;
-  const SosScreen({super.key, required this.preferences, required this.callDispatch});
+  const SosScreen({super.key, required this.preferences});
   @override
   State<SosScreen> createState() => _SosScreenState();
 }
@@ -217,18 +216,38 @@ class _SosScreenState extends State<SosScreen> with WidgetsBindingObserver {
   Widget build(BuildContext context) {
     final status = _alert?.status;
     return Scaffold(
-      appBar: AppBar(title: const Text('SOS • Emergency help')),
+      appBar: AppBar(
+        title: const Text('SOS • Emergency help'),
+        actions: [
+          IconButton(
+            tooltip: 'Call 911 (US emergency services)',
+            onPressed: () => _call('911'),
+            icon: const Icon(Icons.phone, color: Color(0xFFC62828)),
+          ),
+        ],
+      ),
       body: ListView(padding: const EdgeInsets.all(20), children: [
         const Icon(Icons.sos_rounded, color: Color(0xFFC62828), size: 72),
         const SizedBox(height: 16),
         Text('Get help from AT dispatch', style: Theme.of(context).textTheme.headlineSmall),
         const SizedBox(height: 8),
         const Text('SOS alerts your dispatcher, not emergency services. If there is immediate danger, call emergency services now.'),
+        const SizedBox(height: 12),
+        OutlinedButton.icon(
+          onPressed: () => _call('911'),
+          icon: const Icon(Icons.phone),
+          label: const Text('Call 911 (US emergency services)'),
+        ),
+        OutlinedButton.icon(
+          onPressed: () => _call('+16469882066'),
+          icon: const Icon(Icons.support_agent),
+          label: const Text('Call AT dispatch — 6469882066'),
+        ),
         const SizedBox(height: 20),
         if (_alert != null) Card(child: Padding(padding: const EdgeInsets.all(16), child: Text(
           status == 'resolved' ? 'SOS closed by dispatch. GPS stopped.'
           : status == 'acknowledged' ? 'Dispatch has accepted your SOS.'
-          : 'CRM confirmed your SOS. Waiting for dispatch to accept.',
+          : 'Your SOS was received. Waiting for dispatch to accept.',
         ))),
         if (_alert?.locationWarning == true) const Text('SOS is saved, but the initial location was not saved.'),
         if (_trips.isNotEmpty && _pending == null) DropdownButtonFormField<String>(
@@ -255,16 +274,17 @@ class _SosScreenState extends State<SosScreen> with WidgetsBindingObserver {
           subtitle: const Text('Only while this screen is open and the app is in the foreground. You can stop at any time.'),
         ),
         if (_gpsWarning != null) Text(_gpsWarning!),
-        const SizedBox(height: 12),
-        OutlinedButton.icon(onPressed: widget.callDispatch, icon: const Icon(Icons.support_agent), label: const Text('Call AT dispatch')),
-        OutlinedButton.icon(onPressed: () async {
-          try {
-            if (!await launchUrl(Uri.parse('tel:911'), mode: LaunchMode.externalApplication)) throw const SosFailure('Unable to open the phone app. Dial 911 manually (US).');
-          } catch (_) {
-            if (mounted) setState(() => _error = 'Unable to open the phone app. Dial 911 manually (US).');
-          }
-        }, icon: const Icon(Icons.phone), label: const Text('Call 911 (US emergency services)')),
       ]),
     );
+  }
+
+  Future<void> _call(String number) async {
+    try {
+      if (!await launchUrl(Uri.parse('tel:$number'), mode: LaunchMode.externalApplication)) {
+        throw const SosFailure('Unable to open the phone app.');
+      }
+    } catch (_) {
+      if (mounted) setState(() => _error = 'Unable to open the phone app. Dial $number manually.');
+    }
   }
 }

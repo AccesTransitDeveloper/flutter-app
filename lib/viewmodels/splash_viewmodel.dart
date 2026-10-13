@@ -1,12 +1,9 @@
-import 'dart:async';
-
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../data/repository/app_repository.dart';
 import '../core/utils/device_info_helper.dart';
 import '../core/preferences/shared_preference_manager.dart';
 import '../core/providers/app_providers.dart';
 import '../core/localization/app_strings.dart';
-import '../data/api/server_config.dart';
 import '../models/requests/entity_detail_request.dart';
 import '../data/api/response_state.dart';
 import '../core/theme/theme_notifier.dart';
@@ -19,35 +16,19 @@ class SplashViewModel extends StateNotifier<SplashState> {
   final SharedPreferenceManager _sharedPref;
   final ThemeNotifier _themeNotifier;
   String? errorMessage;
-  String? _splashImageUrl;
   bool _isLoggedIn = false;
   bool _isApiDone = false;
   bool _isSplashAnimationDone = false;
-  bool _isGif = false;
-  Timer? _splashTimeoutTimer;
 
   bool _isForceUpdate = false;
   String? _storeUrl;
 
-  String? get splashImageUrl => _splashImageUrl;
   bool get isLoggedIn => _isLoggedIn;
   bool get isForceUpdate => _isForceUpdate;
   String? get storeUrl => _storeUrl;
 
   SplashViewModel(this._appRepository, this._sharedPref, this._themeNotifier)
-    : super(SplashState.loading) {
-    // Load splash image URL from SharedPreferences on init
-    final splashPath = _sharedPref.getSplashPath();
-    if (splashPath != null && splashPath.isNotEmpty) {
-      _splashImageUrl = ServerConfig.getFullImageUrl(splashPath);
-      _isGif = splashPath.toLowerCase().endsWith('.gif');
-    }
-
-    // No image → animation wait not needed
-    if (_splashImageUrl == null) {
-      _isSplashAnimationDone = true;
-    }
-  }
+    : super(SplashState.loading);
 
   void loadSavedThemeColors() {
     final setting = _sharedPref.getSetting();
@@ -67,12 +48,6 @@ class SplashViewModel extends StateNotifier<SplashState> {
 
       // Load theme colors from SharedPreferences (deferred from constructor to avoid Riverpod error)
       loadSavedThemeColors();
-
-      // Start splash animation timeout for GIFs (3s fallback like Kotlin)
-      if (_isGif) {
-        _splashTimeoutTimer?.cancel();
-        _splashTimeoutTimer = Timer(const Duration(seconds: 3), _onSplashAnimationDone);
-      }
 
       // Check if user is logged in
       _isLoggedIn = _sharedPref.isLoggedIn();
@@ -186,23 +161,9 @@ class SplashViewModel extends StateNotifier<SplashState> {
     }
   }
 
-  /// Called by screen when static image finishes loading
-  void onImageLoaded() {
-    if (_isGif || _isSplashAnimationDone) return;
-    _isSplashAnimationDone = true;
-    _goFurther();
-  }
-
-  /// Called by screen when image fails to load
-  void onImageError() {
-    _splashTimeoutTimer?.cancel();
-    _isSplashAnimationDone = true;
-    _goFurther();
-  }
-
-  /// Called when GIF timeout (3s) fires
-  void _onSplashAnimationDone() {
-    _splashTimeoutTimer?.cancel();
+  /// The offline intro finishes independently of session/API initialization.
+  void onSplashAnimationCompleted() {
+    if (_isSplashAnimationDone) return;
     _isSplashAnimationDone = true;
     _goFurther();
   }
@@ -231,11 +192,6 @@ class SplashViewModel extends StateNotifier<SplashState> {
     state = SplashState.imageLoaded;
   }
 
-  @override
-  void dispose() {
-    _splashTimeoutTimer?.cancel();
-    super.dispose();
-  }
 }
 
 final splashViewModelProvider = StateNotifierProvider<SplashViewModel, SplashState>((

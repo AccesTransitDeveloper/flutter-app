@@ -131,7 +131,7 @@ class _SupportChatScreenState extends ConsumerState<SupportChatScreen> with Widg
           titleSpacing: 0,
           title: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Text(open ? (c?.selectedChat?.subject ?? 'New conversation') : 'AT Support Chat', maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
-            Text(open && c?.selectedChat != null ? 'Ticket ${c!.selectedChat!.ticketNumber} · ${c.selectedChat!.status.replaceAll('_', ' ')}' : 'Real CRM dispatchers, not AI',
+            Text(open && c?.selectedChat != null ? 'Ticket ${c!.selectedChat!.ticketNumber} · ${c.selectedChat!.status.replaceAll('_', ' ')}' : 'Talk directly to AT dispatch',
                 style: TextStyle(fontSize: 12, color: col.colorTextHint)),
           ]),
           bottom: PreferredSize(preferredSize: const Size.fromHeight(2), child: (c?.loading ?? false) || (c?.loadingOlder ?? false) ? const LinearProgressIndicator(minHeight: 2) : const SizedBox(height: 2)),
@@ -175,7 +175,7 @@ class _SupportChatScreenState extends ConsumerState<SupportChatScreen> with Widg
         child: c.loading && c.chats.isEmpty
             ? ListView(padding: const EdgeInsets.all(16), children: [for (var i = 0; i < 4; i++) Container(height: 78, margin: const EdgeInsets.only(bottom: 12), decoration: BoxDecoration(color: col.colorBackgroundGray, borderRadius: BorderRadius.circular(16)))])
             : c.chats.isEmpty
-                ? (c.error != null ? _Notice(icon: Icons.cloud_off_rounded, title: 'Could not load conversations', body: c.error!, action: 'Retry', onAction: c.refresh) : _Notice(icon: Icons.support_agent_rounded, title: 'Talk to a real dispatcher', body: 'Send a message, photos, documents or your location. A person on the AT CRM team reads and replies here.', action: 'Start a conversation', onAction: () => _open(null)))
+                ? (c.error != null ? _Notice(icon: Icons.cloud_off_rounded, title: 'Could not load conversations', body: c.error!, action: 'Retry', onAction: c.refresh) : _Notice(icon: Icons.support_agent_rounded, title: 'Talk to a real dispatcher', body: 'Send a message, photos, documents or your location. An AT dispatcher reads and replies here.', action: 'Start a conversation', onAction: () => _open(null)))
                 : RefreshIndicator(
                     onRefresh: c.refresh,
                     child: ListView.separated(

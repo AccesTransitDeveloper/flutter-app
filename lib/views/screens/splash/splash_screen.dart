@@ -3,7 +3,6 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../../core/router/app_navigation.dart';
@@ -12,10 +11,11 @@ import '../../../viewmodels/splash_viewmodel.dart';
 import '../../bottomsheets/app_update_bottom_sheet.dart';
 import '../../widgets/move_server_bottom_sheet.dart';
 import '../../widgets/multi_tap_detector.dart';
+import 'startup_animation.dart';
 
 /// Backdrop behind the splash artwork — only visible for the instant before the
 /// image paints, and behind translucent system bars.
-const _splashBackgroundColor = Color(0xFF0C1E43);
+const _splashBackgroundColor = Color(0xFFF7F7F7);
 
 class SplashScreen extends ConsumerStatefulWidget {
   const SplashScreen({super.key});
@@ -25,6 +25,7 @@ class SplashScreen extends ConsumerStatefulWidget {
 }
 
 class _SplashScreenState extends ConsumerState<SplashScreen> {
+  bool _animationDone = false;
   @override
   void initState() {
     super.initState();
@@ -64,11 +65,11 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: const SystemUiOverlayStyle(
         statusBarColor: Colors.transparent,
-        statusBarIconBrightness: Brightness.light,
-        statusBarBrightness: Brightness.dark,
+        statusBarIconBrightness: Brightness.dark,
+        statusBarBrightness: Brightness.light,
         systemNavigationBarColor: Colors.transparent,
         systemNavigationBarDividerColor: Colors.transparent,
-        systemNavigationBarIconBrightness: Brightness.light,
+        systemNavigationBarIconBrightness: Brightness.dark,
       ),
       child: Scaffold(
         backgroundColor: _splashBackgroundColor,
@@ -81,44 +82,32 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
   }
 
   Widget _buildBody(BuildContext context, SplashState state, SplashViewModel viewModel) {
-    // Show splash image if available (from SharedPreferences)
-    final splashImageUrl = viewModel.splashImageUrl;
-
-    if (splashImageUrl != null) {
-      return CachedNetworkImage(
-        imageUrl: splashImageUrl,
-        fit: BoxFit.cover,
-        width: double.infinity,
-        height: double.infinity,
-        fadeInDuration: Duration.zero,
-        fadeOutDuration: Duration.zero,
-        placeholderFadeInDuration: Duration.zero,
-        imageBuilder: (context, imageProvider) {
-          if (state == SplashState.apiSuccess) {
-            WidgetsBinding.instance.addPostFrameCallback((_) {
-              viewModel.onImageLoaded();
-            });
-          }
-          return Image(
-            image: imageProvider,
-            fit: BoxFit.cover,
-            width: double.infinity,
-            height: double.infinity,
-          );
+    if (!_animationDone) {
+      return StartupAnimation(
+        onCompleted: () {
+          if (!mounted) return;
+          setState(() => _animationDone = true);
+          ref.read(splashViewModelProvider.notifier).onSplashAnimationCompleted();
         },
-        placeholder: (context, url) => const SizedBox.shrink(),
-        errorWidget: (context, url, error) {
-          if (state == SplashState.apiSuccess) {
-            WidgetsBinding.instance.addPostFrameCallback((_) {
-              viewModel.onImageError();
-            });
-          }
-          return _buildDefaultSplash(context);
+        onError: () {
+          if (mounted) context.showErrorSnackBar('Startup animation could not play. Continuing app initialization.');
         },
       );
-    } else {
-      return _buildDefaultSplash(context);
     }
+    return SafeArea(
+      child: Center(
+        child: state == SplashState.error
+            ? Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Text('Could not finish starting the app.'),
+                  const SizedBox(height: 12),
+                  FilledButton(onPressed: viewModel.init, child: const Text('Retry')),
+                ],
+              )
+            : const CircularProgressIndicator(),
+      ),
+    );
   }
 
   void _showAppUpdateBottomSheet(BuildContext context, SplashViewModel viewModel) {
@@ -160,14 +149,4 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
     }
   }
 
-  /// The bundled asset is a full-bleed splash artwork (not a small logo), so it
-  /// is drawn edge-to-edge with BoxFit.cover — matching the native app.
-  Widget _buildDefaultSplash(BuildContext context) {
-    return SizedBox.expand(
-      child: Image.asset(
-        'assets/images/logo_splash.png',
-        fit: BoxFit.cover,
-      ),
-    );
-  }
 }
