@@ -127,13 +127,20 @@ class AiRepository {
     String message,
     String sessionId,
     List<AiMessage> history,
+    {required String language}
   ) async {
     final json = await _post('/api/chat/message', {
       'message': message,
+      'language': language,
       'sessionId': sessionId,
       'conversationHistory': history.map((m) => m.toJson()).toList(),
     });
     final suggestion = json['orderSuggestion'];
+    if (json['language'] != language) {
+      throw const AiConfigurationException(
+        'The AI server has not enabled language selection. Update the AI server.',
+      );
+    }
     return AiReply(
       text:
           (json['message'] ?? json['response'] ?? json['reply'] ?? '').toString(),
@@ -143,16 +150,22 @@ class AiRepository {
     );
   }
 
-  Future<String> transcribe(String base64, String mimeType) async {
+  Future<String> transcribe(String base64, String mimeType, {required String language}) async {
     final json = await _post('/api/chat/transcribe', {
       'audioBase64': base64,
       'mimeType': mimeType,
+      'language': language,
     });
     return (json['text'] ?? json['transcript'] ?? '').toString();
   }
 
-  Future<List<int>> tts(String text) async {
-    final json = await _post('/api/chat/tts', {'text': text});
+  Future<List<int>> tts(String text, {required String language}) async {
+    final json = await _post('/api/chat/tts', {'text': text, 'language': language});
+    if (json['language'] != language || json['agentId'] is! String) {
+      throw const AiConfigurationException(
+        'The AI server has not enabled the selected language agent. Update the AI server.',
+      );
+    }
     return base64Decode((json['audioBase64'] ?? '').toString());
   }
 }

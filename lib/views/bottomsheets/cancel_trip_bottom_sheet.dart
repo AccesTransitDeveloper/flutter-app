@@ -66,23 +66,15 @@ class _CancelTripBottomSheetState extends State<CancelTripBottomSheet> {
   int _selectedIndex = -1;
   String? _otherReason;
 
-  /// Check if the given reason index is the "Others" option (last in list)
-  bool get _isOthersSelected =>
-      _selectedIndex >= 0 &&
-      _selectedIndex == widget.reasons.length - 1;
-
-  /// Get the selected reason text
+  /// Both a selection and a written reason are optional. Never invent a reason.
   String get _selectedReason {
+    final written = (_otherReason ?? '').trim();
+    if (written.isNotEmpty) return written;
     if (_selectedIndex < 0) return '';
-    if (_isOthersSelected) return (_otherReason ?? '').trim();
     return widget.reasons[_selectedIndex];
   }
 
-  bool get _canSubmit {
-    if (_selectedIndex < 0) return false;
-    if (_isOthersSelected) return (_otherReason ?? '').trim().isNotEmpty;
-    return true;
-  }
+  bool get _canSubmit => !widget.isCancelTripLoading;
 
   @override
   Widget build(BuildContext context) {
@@ -105,7 +97,7 @@ class _CancelTripBottomSheetState extends State<CancelTripBottomSheet> {
             Row(
               children: [
                 InkWell(
-                  onTap: widget.onDismiss,
+                  onTap: widget.isCancelTripLoading ? null : widget.onDismiss,
                   borderRadius: BorderRadius.circular(20),
                   child: Icon(
                     Icons.arrow_back,
@@ -141,6 +133,7 @@ class _CancelTripBottomSheetState extends State<CancelTripBottomSheet> {
             ),
 
             const SizedBox(height: AppDimens.paddingM),
+            const Text('Reason is optional. You can cancel without selecting or writing one.'),
 
             // Cancellation charge notice (if applicable)
             if (widget.cancellationCharge.isNotEmpty) ...[
@@ -154,22 +147,24 @@ class _CancelTripBottomSheetState extends State<CancelTripBottomSheet> {
               const SizedBox(height: AppDimens.paddingM),
             ],
 
-            // Reason list with radio buttons
-            RadioGroup<int>(
-              groupValue: _selectedIndex,
-              onChanged: (value) => setState(() => _selectedIndex = value ?? _selectedIndex),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: widget.reasons.asMap().entries.map((entry) {
-                  final index = entry.key;
-                  final reason = entry.value;
-                  return _buildReasonItem(colors, index, reason);
-                }).toList(),
-              ),
+            // Optional quick reasons; tapping the selected chip clears it.
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                for (final entry in widget.reasons.asMap().entries)
+                  ChoiceChip(
+                    label: Text(entry.value),
+                    selected: _selectedIndex == entry.key,
+                    onSelected: widget.isCancelTripLoading ? null : (selected) {
+                      setState(() => _selectedIndex = selected ? entry.key : -1);
+                    },
+                  ),
+              ],
             ),
 
-            // Other reason text field (shown when "Others" is selected)
-            if (_isOthersSelected) ...[
+            // Free-text reason is also optional; the fifth preset is not "Other".
+            ...[
               const SizedBox(height: AppDimens.paddingM),
               AppTextField(
                 onChanged: (value) => setState(() => _otherReason = value),
@@ -213,7 +208,7 @@ class _CancelTripBottomSheetState extends State<CancelTripBottomSheet> {
                   appStr.buttonKeepMyTrip,
                   'button_keep_my_trip',
                 ),
-                onPressed: widget.onDismiss,
+                onPressed: widget.isCancelTripLoading ? null : widget.onDismiss,
               ),
             ),
             ],
@@ -223,40 +218,4 @@ class _CancelTripBottomSheetState extends State<CancelTripBottomSheet> {
     );
   }
 
-  /// Build a single reason item row
-  Widget _buildReasonItem(
-    AppColorPalette colors,
-    int index,
-    String reason,
-  ) {
-    final isSelected = _selectedIndex == index;
-
-    return InkWell(
-      onTap: () => setState(() => _selectedIndex = index),
-      borderRadius: BorderRadius.circular(12),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(
-          vertical: AppDimens.paddingS,
-        ),
-        child: Row(
-          children: [
-            Radio<int>(
-              value: index,
-              activeColor: colors.colorPrimary,
-              materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-              visualDensity: VisualDensity.compact,
-            ),
-            const SizedBox(width: AppDimens.paddingS),
-            Expanded(
-              child: AppText.body(
-                reason,
-                color: isSelected ? colors.colorText : colors.colorText.withValues(alpha: 0.7),
-                fontWeight: isSelected ? FontWeight.w500 : FontWeight.normal,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
 }

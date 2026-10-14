@@ -33,6 +33,7 @@ import '../models/responses/booking/get_vehicle_type_response.dart';
 import '../models/responses/socket/socket_response.dart';
 import '../models/requests/bidding_accept_request.dart';
 import '../models/requests/cancel_booking_request.dart';
+import '../features/booking/cancellation_reasons.dart';
 import '../models/requests/get_vehicle_types_request.dart';
 import '../models/requests/submit_invoice_request.dart';
 import '../models/requests/wallet_payment_request.dart';
@@ -2027,8 +2028,9 @@ class CurrentRideViewModel extends StateNotifier<CurrentRideState> {
   /// Called when user taps "Cancel trip" from popup menu
   /// Shows bottom sheet immediately, data streams in reactively
   void onCancelTripClick() {
-    state = state.copyWith(showCancelTripBottomSheet: true);
+    if (state.isCancelTripLoading) return;
     _getCancellationReasons();
+    state = state.copyWith(showCancelTripBottomSheet: true);
     _getCancellationCharges();
   }
 
@@ -2038,25 +2040,10 @@ class CurrentRideViewModel extends StateNotifier<CurrentRideState> {
   }
 
   /// Fetch cancellation reasons from API
-  Future<void> _getCancellationReasons() async {
-    final response = await _appRepository.getCancellationReasons({
-      'businessType': BusinessType.taxi.toString(),
-    });
-
-    switch (response) {
-      case Success():
-        final reasons = response.data?.cancellationReasons
-                ?.map((r) => r.reasons ?? '')
-                .where((r) => r.isNotEmpty)
-                .toList() ??
-            [];
-        reasons.add(getString(appStr.descriptionOthers, 'description_others'));
-        state = state.copyWith(cancellationReasonList: reasons);
-      case Error():
-        break;
-      case Loading():
-        break;
-    }
+  void _getCancellationReasons() {
+    state = state.copyWith(
+      cancellationReasonList: commonCancellationReasons(_sharedPref.getLanguage()),
+    );
   }
 
   /// Fetch cancellation charges from API
@@ -2083,24 +2070,33 @@ class CurrentRideViewModel extends StateNotifier<CurrentRideState> {
 
   /// Cancel the trip with a given reason
   Future<void> cancelTrip(String reason) async {
+    if (state.isCancelTripLoading) return;
     state = state.copyWith(isCancelTripLoading: true);
 
+    try {
     final request = CancelBookingRequest(
       bookingId: _params.bookingId,
-      cancellationReason: reason,
+      cancellationReason: reason.trim(),
     );
 
     final response = await _appRepository.cancelBooking(
       _params.bookingId,
       request,
     );
+    if (!mounted) return;
 
     switch (response) {
       case Success():
         // The customer's own cancellation has to tear the live surface down
         // here: this screen is about to pop, and once its autoDispose provider
         // is gone nothing else in the app would ever stop the notification.
-        await _stopLiveActivity();
+        try {
+          await _stopLiveActivity().timeout(const Duration(seconds: 3));
+        } catch (_) {
+          // The backend has already cancelled the trip; a notification plugin
+          // failure must not misrepresent that as a failed cancellation.
+        }
+        if (!mounted) return;
         state = state.copyWith(
           isCancelTripLoading: false,
           showCancelTripBottomSheet: false,
@@ -2115,6 +2111,16 @@ class CurrentRideViewModel extends StateNotifier<CurrentRideState> {
         );
       case Loading():
         break;
+    }
+    } catch (_) {
+      if (mounted) {
+        state = state.copyWith(
+          snackBarMessage: 'Could not cancel the trip. Please try again.',
+          isSnackBarError: true,
+        );
+      }
+    } finally {
+      if (mounted) state = state.copyWith(isCancelTripLoading: false);
     }
   }
 

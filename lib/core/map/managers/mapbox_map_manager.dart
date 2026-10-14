@@ -12,6 +12,7 @@ import '../../../models/requests/get_vehicle_types_request.dart';
 import '../../preferences/shared_preference_manager.dart';
 import '../interface/map_interface.dart';
 import '../models/map_types.dart';
+import '../widgets/route_point_glyph.dart';
 import 'google_map_manager.dart';
 
 /// Public Mapbox token supplied at build time.
@@ -778,8 +779,29 @@ class MapboxMapManager implements MapInterface {
   // PNG bytes instead of a BitmapDescriptor.
   // ===========================================================================
 
+  static const _routePointAssets = {
+    'assets/images/ic_pickup.png',
+    'assets/images/ic_drop_off.png',
+  };
+
+  /// Pickup/destination markers use the shared ring-and-stem vector instead
+  /// of the old bitmap assets. Driver pins and numbered stops are untouched.
+  bool _isRoutePoint(MapMarker marker) =>
+      marker.stopNumber == null &&
+      (marker.iconUrl == null || marker.iconUrl!.isEmpty) &&
+      _routePointAssets.contains(marker.iconAsset);
+
   Future<Uint8List> _loadMarkerIcon(MapMarker marker) async {
     try {
+      if (_isRoutePoint(marker)) {
+        // Glyph height ~ requested box height; width derives from the aspect.
+        final height = (marker.iconHeight ?? 32) * 0.9;
+        final key = 'route-point-$height-$_dpr';
+        return _iconCache[key] ??= await RoutePointGlyph.toPng(
+          logicalWidth: height / RoutePointGlyph.aspectRatio,
+          devicePixelRatio: _dpr,
+        );
+      }
       if (marker.stopNumber != null && marker.iconColor != null) {
         return await _createNumberedMarkerIcon(
           marker.stopNumber!,

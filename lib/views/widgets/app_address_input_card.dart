@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../core/theme/app_dimens.dart';
+import '../../core/map/widgets/route_point_glyph.dart';
 import '../../models/requests/get_vehicle_types_request.dart';
 import '../../core/theme/app_theme.dart';
 import 'app_text.dart';
@@ -61,25 +62,15 @@ class AppAddressInputCard extends StatelessWidget {
                 Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Image.asset(
-                      'assets/images/ic_pickup.png',
-                      width: 20,
-                      height: 20,
-                      color: colors.colorPrimary,
-                      colorBlendMode: BlendMode.srcIn,
-                    ),
+                    const SizedBox(width: 20, height: 20,
+                      child: Center(child: RoutePointIcon(size: 20))),
                     Container(
                       width: 1.5,
                       height: 20,
                       color: colors.colorPrimary.withValues(alpha: 0.3),
                     ),
-                    Image.asset(
-                      'assets/images/ic_drop_off.png',
-                      width: 20,
-                      height: 20,
-                      color: colors.colorPrimary,
-                      colorBlendMode: BlendMode.srcIn,
-                    ),
+                    const SizedBox(width: 20, height: 20,
+                      child: Center(child: RoutePointIcon(size: 20))),
                   ],
                 ),
                 const SizedBox(width: AppDimens.paddingM),
@@ -345,18 +336,7 @@ class AppStopsListCard extends StatelessWidget {
           // Pickup icon - centered in first 48px row
           Positioned(
             top: 24 - 8, // 48/2 - 16/2 = center the 16px icon
-            child: Container(
-              width: 16,
-              height: 16,
-              decoration: BoxDecoration(
-                color: colors.colorBackgroundGray,
-                shape: BoxShape.circle,
-                border: Border.all(
-                  color: colors.colorPrimary,
-                  width: 2,
-                ),
-              ),
-            ),
+            child: const RoutePointIcon(size: 16),
           ),
 
           // Stop icons - centered in their respective rows

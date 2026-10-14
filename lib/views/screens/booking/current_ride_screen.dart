@@ -7,6 +7,7 @@ import '../../../core/constants/app_constants.dart';
 import '../../../core/localization/app_strings.dart';
 import '../../../core/map/interface/map_interface.dart';
 import '../../../core/map/widgets/map_host.dart';
+import '../../../core/map/widgets/route_point_glyph.dart';
 import '../../../core/map/providers/map_provider.dart';
 import '../../../core/router/app_navigation.dart';
 import '../../../core/theme/app_dimens.dart';
@@ -162,6 +163,7 @@ class _CurrentRideScreenState extends ConsumerState<CurrentRideScreen>
                       !(previous?.shouldNavigateToHome ?? false)) {
                     debugPrint('🖥️ CurrentRideScreen - Navigating to home');
                     ref.read(mainViewModelProvider.notifier).refreshEntityDetail();
+                    Navigator.of(context).popUntil((route) => route.isFirst);
                     context.navigateToHome();
                   }
 
@@ -237,7 +239,6 @@ class _CurrentRideScreenState extends ConsumerState<CurrentRideScreen>
                             cancellationCharge: cancelState.cancellationCharge,
                             isCancelTripLoading: cancelState.isCancelTripLoading,
                             onReasonSelected: (reason) {
-                              Navigator.pop(context);
                               cancelViewModel.cancelTrip(reason);
                             },
                             onDismiss: () => Navigator.pop(context),
@@ -823,15 +824,11 @@ class _CurrentRideScreenState extends ConsumerState<CurrentRideScreen>
 
                 // Pickup icon (circle outline)
                 Positioned(
-                  top: (rowHeight / 2) - 8,
-                  child: Container(
-                    width: 16,
-                    height: 16,
-                    decoration: BoxDecoration(
-                      color: colors.colorBackground,
-                      shape: BoxShape.circle,
-                      border: Border.all(color: colors.colorPrimary, width: 2),
-                    ),
+                  top: (rowHeight / 2) - 10,
+                  child: const SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: Center(child: RoutePointIcon(size: 20)),
                   ),
                 ),
 
@@ -842,12 +839,10 @@ class _CurrentRideScreenState extends ConsumerState<CurrentRideScreen>
                       top: rowHeight + (i * rowHeight) + (rowHeight / 2) - 10,
                       child: i == destinations.length - 1
                           // Final destination - drop off icon
-                          ? Image.asset(
-                              'assets/images/ic_drop_off.png',
+                          ? const SizedBox(
                               width: 20,
                               height: 20,
-                              color: colors.colorPrimary,
-                              colorBlendMode: BlendMode.srcIn,
+                              child: Center(child: RoutePointIcon(size: 20)),
                             )
                           // Intermediate stop - numbered square
                           : Container(
@@ -872,13 +867,11 @@ class _CurrentRideScreenState extends ConsumerState<CurrentRideScreen>
                 if (!hasDestinations && canEditAddress)
                   Positioned(
                     top: rowHeight + (rowHeight / 2) - 10,
-                    child: Image.asset(
-                      'assets/images/ic_drop_off.png',
-                      width: 20,
-                      height: 20,
-                      color: colors.colorPrimary,
-                      colorBlendMode: BlendMode.srcIn,
-                    ),
+                    child: const SizedBox(
+                              width: 20,
+                              height: 20,
+                              child: Center(child: RoutePointIcon(size: 20)),
+                            ),
                   ),
               ],
             ),

@@ -67,6 +67,7 @@ class MyApp extends ConsumerWidget {
 
     return serverConfigInit.when(
       data: (_) => MaterialApp.router(
+        debugShowCheckedModeBanner: false,
         title: 'AT — Fair Rides NYC',
         theme: themeState.getLightTheme(),
         darkTheme: themeState.getDarkTheme(),
@@ -74,6 +75,7 @@ class MyApp extends ConsumerWidget {
         routerConfig: router,
       ),
       loading: () => const MaterialApp(
+        debugShowCheckedModeBanner: false,
         home: Scaffold(
           body: Center(
             child: CircularProgressIndicator(),
@@ -81,6 +83,7 @@ class MyApp extends ConsumerWidget {
         ),
       ),
       error: (error, stack) => MaterialApp(
+        debugShowCheckedModeBanner: false,
         home: Scaffold(
           body: Center(
             child: Text('Error initializing app: $error'),

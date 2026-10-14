@@ -33,6 +33,7 @@ class AiAssistantViewModel extends StateNotifier<AiAssistantState> {
   Future<void> _recorderQueue = Future<void>.value();
   Future<void> _playerQueue = Future<void>.value();
   int _generation = 0;
+  String _languageCode = 'en';
   bool _busy = false;
   bool _disposed = false;
   late final Future<void> _ready;
@@ -94,6 +95,24 @@ class AiAssistantViewModel extends StateNotifier<AiAssistantState> {
 
   Future<void> send(String text) => _sendMessage(text);
 
+  void setLanguage(String language) {
+    if (_disposed || language == _languageCode) return;
+    if (!const ['en', 'ru', 'es', 'ar', 'zh', 'hi', 'tr', 'ja'].contains(language)) {
+      throw ArgumentError.value(language, 'language', 'Unsupported AI language');
+    }
+    _languageCode = language;
+    _generation++; // Discard old replies, transcription and pending TTS.
+    _busy = false;
+    final path = _recordingPath;
+    _recordingPath = null;
+    unawaited(_stopRecordingForReset(path));
+    unawaited(stopPlayback());
+    state = state.copyWith(
+      isLoading: false, isListening: false, isSpeaking: false,
+      clearError: true, clearRetryMessage: true,
+    );
+  }
+
   Future<void> retryLastMessage() async {
     if (_busy || _disposed) return;
     final retryMessage = state.retryMessage;
@@ -109,7 +128,7 @@ class AiAssistantViewModel extends StateNotifier<AiAssistantState> {
     final message = text.trim();
     if (message.isEmpty || _busy || state.isListening || _disposed) return;
     await _ready;
-    if (_disposed) return;
+    if (_disposed || _busy) return;
 
     final generation = _generation;
     _busy = true;
@@ -135,7 +154,8 @@ class AiAssistantViewModel extends StateNotifier<AiAssistantState> {
       clearOrderSuggestion: true,
     );
     try {
-      final reply = await repository.sendMessage(message, sessionId, history);
+      final reply = await repository.sendMessage(message, sessionId, history,
+          language: _languageCode);
       if (!_isCurrent(generation)) return;
       state = state.copyWith(
         messages: [...messages, AiMessage(text: reply.text, fromUser: false)],
@@ -221,7 +241,8 @@ class AiAssistantViewModel extends StateNotifier<AiAssistantState> {
       final bytes = await File(path).readAsBytes();
       if (!_isCurrent(generation)) return;
       final transcript =
-          await repository.transcribe(base64Encode(bytes), 'audio/mp4');
+          await repository.transcribe(base64Encode(bytes), 'audio/mp4',
+              language: _languageCode);
       if (!_isCurrent(generation)) return;
       if (transcript.trim().isEmpty) {
         state = state.copyWith(isLoading: false);
@@ -249,7 +270,7 @@ class AiAssistantViewModel extends StateNotifier<AiAssistantState> {
 
   Future<void> _speak(String text, int generation) async {
     try {
-      final bytes = await repository.tts(text);
+      final bytes = await repository.tts(text, language: _languageCode);
       if (!_isCurrent(generation)) return;
       await _completionSubscription?.cancel();
       _completionSubscription = null;

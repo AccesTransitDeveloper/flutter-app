@@ -5,6 +5,7 @@ import '../../../core/constants/app_constants.dart';
 import '../../../core/localization/app_strings.dart';
 import '../../../core/map/interface/map_interface.dart';
 import '../../../core/map/widgets/map_host.dart';
+import '../../../core/map/widgets/route_point_glyph.dart';
 import '../../../core/router/app_navigation.dart';
 import '../../../core/map/providers/map_provider.dart';
 import '../../../core/theme/app_dimens.dart';
@@ -636,7 +637,7 @@ class _PlanRideScreenState extends ConsumerState<PlanRideScreen> {
                 ),
                 child: Row(
                   children: [
-                    Icon(Icons.circle, color: colors.colorText, size: 10),
+                    const RoutePointIcon(size: 16),
                     const SizedBox(width: AppDimens.paddingM),
                     Expanded(
                       child: isLoading
@@ -720,11 +721,7 @@ class _PlanRideScreenState extends ConsumerState<PlanRideScreen> {
               ),
               child: Row(
                 children: [
-                  Icon(
-                    isPickupFocus ? Icons.circle : Icons.square,
-                    color: colors.colorText,
-                    size: 10,
-                  ),
+                  const RoutePointIcon(size: 16),
                   const SizedBox(width: AppDimens.paddingM),
                   Expanded(
                     child: AppText.body(

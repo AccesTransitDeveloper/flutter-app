@@ -5,6 +5,7 @@ import '../../core/map/interface/map_interface.dart';
 import '../../core/map/models/map_types.dart';
 import '../../core/map/providers/map_provider.dart';
 import '../../core/map/widgets/map_host.dart';
+import '../../core/map/widgets/route_point_glyph.dart';
 import '../../models/requests/get_vehicle_types_request.dart';
 import 'ai_models.dart';
 
@@ -240,11 +241,9 @@ class _AddressRow extends StatelessWidget {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Container(
-          width: 10,
-          height: 10,
-          margin: const EdgeInsets.only(top: 4),
-          decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+        const Padding(
+          padding: EdgeInsets.only(top: 4),
+          child: RoutePointIcon(size: 16),
         ),
         const SizedBox(width: 9),
         Expanded(

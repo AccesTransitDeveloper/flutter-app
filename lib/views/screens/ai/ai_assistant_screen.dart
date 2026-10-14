@@ -5,7 +5,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../features/ai/ai_models.dart';
-import '../../../features/ai/ai_quick_prompts.dart';
 import '../../../features/ai/ai_route_preview.dart';
 import '../../../features/ai/ai_viewmodel.dart';
 import '../../../features/ai/voice_orb.dart';
@@ -23,13 +22,15 @@ class _AiAssistantScreenState extends ConsumerState<AiAssistantScreen> {
   final _input = TextEditingController();
   final _scroll = ScrollController();
   String _languageCode = 'en';
-  bool _showSuggestions = false;
   int _lastItemCount = 0;
   bool _lastLoading = false;
 
   /// Actual nav: 24px icon + 20px item padding + 16px container padding,
   /// with 6px top margin and max(system inset, 12px) bottom margin.
   static const double _navBarFootprint = 66;
+
+  /// Extra lift for the message composer above its previous resting spot.
+  static const double _composerLift = 27;
 
   static const _languages = <_AiLanguage>[
     _AiLanguage('en', 'EN', 'English', 'Message'),
@@ -59,14 +60,7 @@ class _AiAssistantScreenState extends ConsumerState<AiAssistantScreen> {
     }
     final text = _input.text;
     _input.clear();
-    setState(() => _showSuggestions = false);
     ref.read(aiAssistantProvider.notifier).send(text);
-    _scrollToBottom(force: true);
-  }
-
-  void _sendPrompt(AiQuickPrompt prompt) {
-    setState(() => _showSuggestions = false);
-    ref.read(aiAssistantProvider.notifier).send(prompt.message);
     _scrollToBottom(force: true);
   }
 
@@ -93,8 +87,6 @@ class _AiAssistantScreenState extends ConsumerState<AiAssistantScreen> {
   Widget build(BuildContext context) {
     final state = ref.watch(aiAssistantProvider);
     final viewModel = ref.read(aiAssistantProvider.notifier);
-    final hasUserMessage = state.messages.any((m) => m.fromUser);
-    final showPrompts = !hasUserMessage || _showSuggestions;
     final itemCount =
         state.messages.length + (state.orderSuggestion == null ? 0 : 1);
     // Follow new content only when the reader is already near the bottom;
@@ -140,7 +132,10 @@ class _AiAssistantScreenState extends ConsumerState<AiAssistantScreen> {
           PopupMenuButton<String>(
             tooltip: 'Select language',
             initialValue: _languageCode,
-            onSelected: (value) => setState(() => _languageCode = value),
+            onSelected: (value) {
+              viewModel.setLanguage(value);
+              setState(() => _languageCode = value);
+            },
             itemBuilder: (context) => [
               for (final language in _languages)
                 PopupMenuItem(
@@ -236,24 +231,6 @@ class _AiAssistantScreenState extends ConsumerState<AiAssistantScreen> {
                         color: Colors.white,
                         icon: const Icon(Icons.stop_circle_outlined),
                       )
-                    else if (hasUserMessage)
-                      TextButton.icon(
-                        onPressed: () {
-                          setState(() => _showSuggestions = !_showSuggestions);
-                          if (_showSuggestions) _scrollToBottom(force: true);
-                        },
-                        style: TextButton.styleFrom(
-                          foregroundColor: const Color(0xFF7DD3FC),
-                          visualDensity: VisualDensity.compact,
-                        ),
-                        icon: Icon(
-                          _showSuggestions
-                              ? Icons.close_rounded
-                              : Icons.lightbulb_outline_rounded,
-                          size: 18,
-                        ),
-                        label: const Text('Suggestions'),
-                      ),
                   ],
                 ),
               ),
@@ -263,23 +240,12 @@ class _AiAssistantScreenState extends ConsumerState<AiAssistantScreen> {
                   keyboardDismissBehavior:
                       ScrollViewKeyboardDismissBehavior.onDrag,
                   padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
-                  itemCount: itemCount + (showPrompts ? 1 : 0),
+                  itemCount: itemCount,
                   itemBuilder: (_, index) {
                     if (index < state.messages.length) {
                       return _bubble(state.messages[index]);
                     }
-                    if (state.orderSuggestion != null &&
-                        index == state.messages.length) {
-                      return _orderCard(state.orderSuggestion!);
-                    }
-                    return Padding(
-                      padding: const EdgeInsets.only(top: 10, bottom: 4),
-                      child: AiQuickPromptGrid(
-                        onSelected: state.isLoading || state.isListening
-                            ? null
-                            : _sendPrompt,
-                      ),
-                    );
+                    return _orderCard(state.orderSuggestion!);
                   },
                 ),
               ),
@@ -302,7 +268,7 @@ class _AiAssistantScreenState extends ConsumerState<AiAssistantScreen> {
                   ],
                 ),
               Padding(
-                padding: const EdgeInsets.fromLTRB(10, 4, 10, 4),
+                padding: const EdgeInsets.fromLTRB(10, 4, 10, 4 + _composerLift),
                 child: Row(
                   children: [
                     Expanded(
