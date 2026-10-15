@@ -90,7 +90,7 @@ class MapPolyline {
   const MapPolyline({
     required this.id,
     required this.points,
-    this.color = 0xFF000000,
+    this.color = 0xFF26C6FF,
     this.width = 5.0,
   });
 

@@ -105,7 +105,7 @@ class _AiRoutePreviewState extends ConsumerState<AiRoutePreview> {
         iconAsset: 'assets/images/ic_pickup.png',
         iconWidth: 30,
         iconHeight: 30,
-        iconColor: 0xFF38BDF8,
+        iconColor: RoutePointGlyph.pickupColor.toARGB32(),
       ),
       MapMarker(
         id: 'ai_dropoff',
@@ -115,7 +115,7 @@ class _AiRoutePreviewState extends ConsumerState<AiRoutePreview> {
         iconAsset: 'assets/images/ic_drop_off.png',
         iconWidth: 30,
         iconHeight: 30,
-        iconColor: 0xFF2563EB,
+        iconColor: RoutePointGlyph.dropoffColor.toARGB32(),
       ),
     ]);
 
@@ -175,13 +175,13 @@ class _AiRoutePreviewState extends ConsumerState<AiRoutePreview> {
                 ),
                 const SizedBox(height: 10),
                 _AddressRow(
-                  color: const Color(0xFF38BDF8),
+                  color: RoutePointGlyph.pickupColor,
                   label: 'Pickup',
                   address: widget.suggestion.pickup ?? '',
                 ),
                 const SizedBox(height: 8),
                 _AddressRow(
-                  color: const Color(0xFF2563EB),
+                  color: RoutePointGlyph.dropoffColor,
                   label: 'Drop-off',
                   address: widget.suggestion.destination ?? '',
                 ),
@@ -241,9 +241,9 @@ class _AddressRow extends StatelessWidget {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Padding(
-          padding: EdgeInsets.only(top: 4),
-          child: RoutePointIcon(size: 16),
+        Padding(
+          padding: const EdgeInsets.only(top: 4),
+          child: RoutePointIcon(size: 16, color: color),
         ),
         const SizedBox(width: 9),
         Expanded(

@@ -36,6 +36,10 @@ void main() {
   final glyph = source('lib/core/map/widgets/route_point_glyph.dart');
   check(manager.contains('RoutePointGlyph.toPng') &&
       glyph.contains('PathFillType.evenOdd') &&
-      glyph.contains('Color(0xFF111111)'), 'Mapbox must use transparent black ring-and-stem markers.');
+      glyph.contains('pickupColor = Color(0xFF26C6FF)') &&
+      glyph.contains('dropoffColor = Color(0xFFFF42C8)') &&
+      manager.contains('existing.lineColor = routeColor') &&
+      manager.contains(r'route-point-${fill.toARGB32()}'),
+      'Mapbox must use transparent cyan/pink pins, separate icon caches and a cyan route.');
   print('Customer AI, language wiring, optional cancellation and marker source checks passed.');
 }

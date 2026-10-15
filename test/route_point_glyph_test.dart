@@ -4,6 +4,11 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:customer/core/map/widgets/route_point_glyph.dart';
 
 void main() {
+  test('pickup is cyan, drop-off is pink and route is cyan', () {
+    expect(RoutePointGlyph.pickupColor, const Color(0xFF26C6FF));
+    expect(RoutePointGlyph.dropoffColor, const Color(0xFFFF42C8));
+    expect(RoutePointGlyph.routeColor, RoutePointGlyph.pickupColor);
+  });
   test('glyph has a transparent hole and outside, solid ring and stem', () {
     const size = Size(40, 60);
     final path = RoutePointGlyph.path(size);

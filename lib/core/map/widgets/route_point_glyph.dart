@@ -3,7 +3,7 @@ import 'dart:ui' as ui;
 
 import 'package:flutter/widgets.dart';
 
-/// Black ring-and-stem marker used for pickup and destination points.
+/// Transparent ring-and-stem marker used for pickup and destination points.
 ///
 /// Geometry lives in a unit box (width 1, height [aspectRatio]) so the same
 /// path drives the in-app widget and the rasterised Mapbox marker. The stem
@@ -11,7 +11,10 @@ import 'package:flutter/widgets.dart';
 class RoutePointGlyph {
   RoutePointGlyph._();
 
-  static const Color color = Color(0xFF111111);
+  static const Color pickupColor = Color(0xFF26C6FF);
+  static const Color dropoffColor = Color(0xFFFF42C8);
+  static const Color routeColor = pickupColor;
+  static const Color color = pickupColor;
 
   /// Height / width.
   static const double aspectRatio = 1.5;

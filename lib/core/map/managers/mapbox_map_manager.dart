@@ -738,6 +738,10 @@ class MapboxMapManager implements MapInterface {
       }
 
       for (final line in lines) {
+        // The primary trip route must not inherit the theme's black primary
+        // color. Keep driver history styling independent.
+        final routeColor = identical(line, _routePolyline)
+            ? RoutePointGlyph.routeColor.toARGB32() : line.color;
         final geometry = mb.LineString(
           coordinates: line.points
               .map((p) => mb.Position(p.longitude, p.latitude))
@@ -747,6 +751,9 @@ class MapboxMapManager implements MapInterface {
         final existing = _lineAnnotations[line.id];
         if (existing != null) {
           existing.geometry = geometry;
+          existing.lineColor = routeColor;
+          existing.lineWidth = line.width;
+          existing.lineEmissiveStrength = 1.0;
           await manager.update(existing);
           continue;
         }
@@ -754,7 +761,7 @@ class MapboxMapManager implements MapInterface {
         _lineAnnotations[line.id] = await manager.create(
           mb.PolylineAnnotationOptions(
             geometry: geometry,
-            lineColor: line.color,
+            lineColor: routeColor,
             lineWidth: line.width,
             // Standard's night preset lights the scene, and an unlit line gets
             // darkened until it reads as black whatever colour it is. Emitting
@@ -796,10 +803,13 @@ class MapboxMapManager implements MapInterface {
       if (_isRoutePoint(marker)) {
         // Glyph height ~ requested box height; width derives from the aspect.
         final height = (marker.iconHeight ?? 32) * 0.9;
-        final key = 'route-point-$height-$_dpr';
+        final fill = marker.iconAsset?.endsWith('ic_drop_off.png') == true
+            ? RoutePointGlyph.dropoffColor : RoutePointGlyph.pickupColor;
+        final key = 'route-point-${fill.toARGB32()}-$height-$_dpr';
         return _iconCache[key] ??= await RoutePointGlyph.toPng(
           logicalWidth: height / RoutePointGlyph.aspectRatio,
           devicePixelRatio: _dpr,
+          fill: fill,
         );
       }
       if (marker.stopNumber != null && marker.iconColor != null) {

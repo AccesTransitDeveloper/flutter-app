@@ -721,7 +721,7 @@ class _PlanRideScreenState extends ConsumerState<PlanRideScreen> {
               ),
               child: Row(
                 children: [
-                  const RoutePointIcon(size: 16),
+                  const RoutePointIcon(size: 16, color: RoutePointGlyph.dropoffColor),
                   const SizedBox(width: AppDimens.paddingM),
                   Expanded(
                     child: AppText.body(

@@ -67,10 +67,10 @@ class AppAddressInputCard extends StatelessWidget {
                     Container(
                       width: 1.5,
                       height: 20,
-                      color: colors.colorPrimary.withValues(alpha: 0.3),
+                      color: RoutePointGlyph.routeColor,
                     ),
                     const SizedBox(width: 20, height: 20,
-                      child: Center(child: RoutePointIcon(size: 20))),
+                      child: Center(child: RoutePointIcon(size: 20, color: RoutePointGlyph.dropoffColor))),
                   ],
                 ),
                 const SizedBox(width: AppDimens.paddingM),
@@ -329,7 +329,7 @@ class AppStopsListCard extends StatelessWidget {
             bottom: 24, // Center of last row (add stop)
             child: Container(
               width: 1.5,
-              color: colors.colorPrimary.withValues(alpha: 0.3),
+              color: RoutePointGlyph.routeColor,
             ),
           ),
 
@@ -343,7 +343,10 @@ class AppStopsListCard extends StatelessWidget {
           for (int i = 0; i < stops.length; i++)
             Positioned(
               top: 48 + (i * 48) + 24 - 10, // row offset + center - half icon height
-              child: Container(
+              child: i == stops.length - 1
+                  ? const SizedBox(width: 20, height: 20,
+                      child: Center(child: RoutePointIcon(size: 20, color: RoutePointGlyph.dropoffColor)))
+                  : Container(
                 width: 20,
                 height: 20,
                 decoration: BoxDecoration(

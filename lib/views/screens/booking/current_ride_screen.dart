@@ -818,7 +818,7 @@ class _CurrentRideScreenState extends ConsumerState<CurrentRideScreen>
                     bottom: rowHeight / 2,
                     child: Container(
                       width: 1.5,
-                      color: colors.colorPrimary.withValues(alpha: 0.3),
+                      color: RoutePointGlyph.routeColor,
                     ),
                   ),
 
@@ -842,7 +842,7 @@ class _CurrentRideScreenState extends ConsumerState<CurrentRideScreen>
                           ? const SizedBox(
                               width: 20,
                               height: 20,
-                              child: Center(child: RoutePointIcon(size: 20)),
+                              child: Center(child: RoutePointIcon(size: 20, color: RoutePointGlyph.dropoffColor)),
                             )
                           // Intermediate stop - numbered square
                           : Container(
@@ -870,7 +870,7 @@ class _CurrentRideScreenState extends ConsumerState<CurrentRideScreen>
                     child: const SizedBox(
                               width: 20,
                               height: 20,
-                              child: Center(child: RoutePointIcon(size: 20)),
+                              child: Center(child: RoutePointIcon(size: 20, color: RoutePointGlyph.dropoffColor)),
                             ),
                   ),
               ],
