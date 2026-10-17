@@ -32,9 +32,9 @@ void main() {
       'Only complete six-second playback may open the app.');
   final html = startupVideoHtml('ORIGINAL_MP4_BYTES');
   require(html.contains('data:video/mp4;base64,ORIGINAL_MP4_BYTES') &&
-      html.contains('object-fit:contain') && html.contains('object-position:center') &&
-      html.contains('background:#f7f7f7') && !html.contains('object-fit:cover'),
-      'Whole original video must fit without cropping or stretching.');
+      html.contains('object-fit:cover') && html.contains('object-position:center') &&
+      html.contains('width:100vw;height:100vh') && !html.contains('object-fit:contain'),
+      'Original video must fill the screen without bars or stretching.');
   require(html.contains("addEventListener('ended'") &&
       !html.contains('setTimeout') && !html.contains(' loop'),
       'Startup completion must follow the actual video end.');

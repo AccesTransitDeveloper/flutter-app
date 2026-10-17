@@ -2,14 +2,14 @@ bool startupVideoFinished(Object? time, Object? duration) =>
     time is num && duration is num && time.isFinite && duration.isFinite &&
     duration >= 6 && duration <= 6.1 && time >= duration;
 
-/// Fit the complete video inside any phone viewport without cropping/stretching.
-/// Unused space has a matching neutral background; original bytes are unchanged.
+/// Fill the phone viewport without letterboxing or stretching.
+/// Center-crop only when aspect ratios differ; original bytes are unchanged.
 String startupVideoHtml(String originalBase64) => '''
 <!doctype html>
 <html><head><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <style>
 html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#f7f7f7}
-video{position:fixed;inset:0;width:100vw;height:100vh;object-fit:contain;object-position:center;background:#f7f7f7;pointer-events:none}
+video{position:fixed;inset:0;width:100vw;height:100vh;object-fit:cover;object-position:center;background:#f7f7f7;pointer-events:none}
 </style></head><body>
 <video id="intro" playsinline webkit-playsinline muted preload="auto" disablepictureinpicture
  src="data:video/mp4;base64,$originalBase64"></video>
