@@ -10,7 +10,7 @@
 - Cancellation offers five localized quick reasons and optional free text. Selecting or writing a reason is not required. Empty reason is serialized explicitly as `cancellationReason: ""`.
 - The cancellation sheet stays open while the request runs. Failed requests remain retryable; duplicate submission is disabled.
 - Debug ribbons are disabled on all MaterialApp branches.
-- Pickup uses a cyan ring-and-stem glyph and final destination uses pink, both with a transparent background and hole. The connecting trip route is cyan, independent of the app's primary theme color. Mapbox, driver vehicle images and numbered intermediate stops are preserved.
+- Pickup uses a dark blue (#00008B) ring-and-stem glyph and final destination uses dark red (#8B0000), both with a transparent background and hole. The connecting trip route is dark green (#006400), independent of the app's primary theme color. Mapbox, driver vehicle images and numbered intermediate stops are preserved.
 
 ## Required server releases
 
