@@ -37,11 +37,11 @@ void main() {
   check(manager.contains('RoutePointGlyph.toPng') &&
       glyph.contains('PathFillType.evenOdd') &&
       glyph.contains('pickupColor = Color(0xFF00008B)') &&
-      glyph.contains('dropoffColor = Color(0xFF8B0000)') &&
+      glyph.contains('dropoffColor = Color(0xFFFF0000)') &&
       glyph.contains('routeColor = Color(0xFF006400)') &&
       source('lib/core/map/models/map_types.dart').contains('this.color = 0xFF006400') &&
       manager.contains('existing.lineColor = routeColor') &&
       manager.contains(r'route-point-${fill.toARGB32()}'),
-      'Mapbox must use dark blue/red pins, separate icon caches and a dark green route.');
+      'Mapbox must use dark blue pickup and #FF0000 drop-off pins, separate icon caches and a dark green route.');
   print('Customer AI, language wiring, optional cancellation and marker source checks passed.');
 }

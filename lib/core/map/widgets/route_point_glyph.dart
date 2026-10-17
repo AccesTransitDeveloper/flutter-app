@@ -12,7 +12,7 @@ class RoutePointGlyph {
   RoutePointGlyph._();
 
   static const Color pickupColor = Color(0xFF00008B);
-  static const Color dropoffColor = Color(0xFF8B0000);
+  static const Color dropoffColor = Color(0xFFFF0000);
   static const Color routeColor = Color(0xFF006400);
   static const Color color = pickupColor;
 

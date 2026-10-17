@@ -4,9 +4,9 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:customer/core/map/widgets/route_point_glyph.dart';
 
 void main() {
-  test('pickup is dark blue, drop-off is dark red and route is dark green', () {
+  test('pickup is dark blue, drop-off is #FF0000 and route is dark green', () {
     expect(RoutePointGlyph.pickupColor, const Color(0xFF00008B));
-    expect(RoutePointGlyph.dropoffColor, const Color(0xFF8B0000));
+    expect(RoutePointGlyph.dropoffColor, const Color(0xFFFF0000));
     expect(RoutePointGlyph.routeColor, const Color(0xFF006400));
   });
   test('glyph has a transparent hole and outside, solid ring and stem', () {
