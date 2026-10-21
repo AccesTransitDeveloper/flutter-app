@@ -10,6 +10,7 @@ import '../../core/providers/app_providers.dart';
 import '../../core/providers/bottom_nav_visibility_provider.dart';
 import '../../data/repository/app_repository.dart';
 import '../../features/ai/ai_models.dart';
+import '../../features/ai/ai_viewmodel.dart';
 import '../../viewmodels/activity_viewmodel.dart';
 import '../../viewmodels/home_viewmodel.dart';
 import '../../viewmodels/inbox_viewmodel.dart';
@@ -62,6 +63,9 @@ class _MainScreenState extends ConsumerState<MainScreen>
 
   void _onTabChanged(int index) {
     final previousIndex = _currentNavIndex;
+    if (previousIndex == 2 && index != 2) {
+      ref.read(aiAssistantProvider.notifier).suspendVoice();
+    }
     setState(() {
       _currentNavIndex = index;
       _visitedTabs.add(index);

@@ -329,8 +329,8 @@ class _AiAssistantScreenState extends ConsumerState<AiAssistantScreen> {
                     Semantics(
                       button: true,
                       label: state.isListening
-                          ? 'Stop voice message'
-                          : 'Record voice message in ${_selectedLanguage.name}',
+                          ? 'Listening — sends automatically after a pause. Tap to send now.'
+                          : 'Speak in ${_selectedLanguage.name}. Your message sends automatically after a pause.',
                       child: Material(
                         color: state.isListening
                             ? const Color(0xFFE5484D)
@@ -428,7 +428,7 @@ class _AiAssistantScreenState extends ConsumerState<AiAssistantScreen> {
   }
 
   String _statusText(AiAssistantState state) {
-    if (state.isListening) return 'Listening…';
+    if (state.isListening) return 'Listening… pause to send';
     if (state.isLoading) return 'Thinking…';
     if (state.isSpeaking) return 'Speaking…';
     return 'Ready to help';

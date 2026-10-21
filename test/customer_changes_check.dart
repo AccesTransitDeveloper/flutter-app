@@ -24,10 +24,11 @@ void main() {
   final sheet = source('lib/views/bottomsheets/cancel_trip_bottom_sheet.dart');
   check(sheet.contains('bool get _canSubmit => !widget.isCancelTripLoading') &&
       sheet.contains("if (_selectedIndex < 0) return ''") &&
-      sheet.contains('ChoiceChip('), 'Cancellation is enabled without a reason and offers quick reasons.');
+      sheet.contains('ChoiceChip('), 'Cancellation remains optional and offers Other.');
   for (final language in ['en', 'ru', 'es', 'ar', 'zh', 'hi', 'tr', 'ja']) {
-    check(commonCancellationReasons(language).length == 5,
-        'Exactly five localized common reasons for $language.');
+    check(commonCancellationReasons(language).length == 1 &&
+        commonCancellationReasons(language).single == 'Other',
+        'Other is the only cancellation choice for $language.');
   }
   final main = source('lib/main.dart');
   check(RegExp('debugShowCheckedModeBanner: false').allMatches(main).length == 3,

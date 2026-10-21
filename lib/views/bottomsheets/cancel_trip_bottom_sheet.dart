@@ -7,8 +7,7 @@ import '../widgets/app_button.dart';
 import '../widgets/app_text.dart';
 import '../widgets/app_text_field.dart';
 
-/// Bottom sheet for cancelling a trip with reason selection
-/// Shows radio buttons for reason selection with a cancel trip button
+/// Cancels a trip with an optional "Other" choice and optional written reason.
 class CancelTripBottomSheet extends StatefulWidget {
   final List<String> reasons;
   final String cancellationCharge;
@@ -68,9 +67,9 @@ class _CancelTripBottomSheetState extends State<CancelTripBottomSheet> {
 
   /// Both a selection and a written reason are optional. Never invent a reason.
   String get _selectedReason {
+    if (_selectedIndex < 0) return '';
     final written = (_otherReason ?? '').trim();
     if (written.isNotEmpty) return written;
-    if (_selectedIndex < 0) return '';
     return widget.reasons[_selectedIndex];
   }
 
@@ -147,7 +146,7 @@ class _CancelTripBottomSheetState extends State<CancelTripBottomSheet> {
               const SizedBox(height: AppDimens.paddingM),
             ],
 
-            // Optional quick reasons; tapping the selected chip clears it.
+            // Only "Other" is offered; tapping again clears the selection.
             Wrap(
               spacing: 8,
               runSpacing: 8,
@@ -163,8 +162,8 @@ class _CancelTripBottomSheetState extends State<CancelTripBottomSheet> {
               ],
             ),
 
-            // Free-text reason is also optional; the fifth preset is not "Other".
-            ...[
+            // A written explanation is optional, even after selecting Other.
+            if (_selectedIndex >= 0) ...[
               const SizedBox(height: AppDimens.paddingM),
               AppTextField(
                 onChanged: (value) => setState(() => _otherReason = value),

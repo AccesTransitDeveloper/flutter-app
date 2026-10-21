@@ -5,10 +5,12 @@ import 'dart:io';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:record/record.dart';
+import 'package:flutter/widgets.dart';
 
 import '../../data/ai/ai_repository.dart';
 import '../../core/preferences/shared_preference_manager.dart';
 import 'ai_models.dart';
+import 'voice_activity_gate.dart';
 
 final aiRepositoryProvider = Provider.autoDispose<AiRepository>((ref) {
   final repository = AiRepository();
@@ -21,7 +23,8 @@ final aiAssistantProvider =
   (ref) => AiAssistantViewModel(ref.watch(aiRepositoryProvider)),
 );
 
-class AiAssistantViewModel extends StateNotifier<AiAssistantState> {
+class AiAssistantViewModel extends StateNotifier<AiAssistantState>
+    with WidgetsBindingObserver {
   final AiRepository repository;
   final String sessionId =
       '${DateTime.now().microsecondsSinceEpoch}-${DateTime.now().millisecondsSinceEpoch % 100000}';
@@ -30,6 +33,9 @@ class AiAssistantViewModel extends StateNotifier<AiAssistantState> {
 
   String? _recordingPath;
   StreamSubscription<void>? _completionSubscription;
+  StreamSubscription<Amplitude>? _amplitudeSubscription;
+  Stream<Amplitude>? _amplitudeStream;
+  Timer? _voiceTimer;
   Future<void> _recorderQueue = Future<void>.value();
   Future<void> _playerQueue = Future<void>.value();
   int _generation = 0;
@@ -39,7 +45,30 @@ class AiAssistantViewModel extends StateNotifier<AiAssistantState> {
   late final Future<void> _ready;
 
   AiAssistantViewModel(this.repository) : super(const AiAssistantState()) {
+    WidgetsBinding.instance.addObserver(this);
     _ready = _initializeGreeting();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState lifecycle) {
+    if (_disposed || lifecycle == AppLifecycleState.resumed ||
+        lifecycle == AppLifecycleState.inactive) return;
+    suspendVoice();
+  }
+
+  void suspendVoice() {
+    if (_disposed) return;
+    // Never submit a recording just because the app was put in the background.
+    _stopVoiceDetection();
+    _generation++;
+    _busy = false;
+    final path = _recordingPath;
+    _recordingPath = null;
+    unawaited(_stopRecordingForReset(path));
+    unawaited(stopPlayback());
+    state = state.copyWith(
+      isListening: false, isLoading: false, isSpeaking: false,
+    );
   }
 
   Future<void> _initializeGreeting() async {
@@ -101,6 +130,7 @@ class AiAssistantViewModel extends StateNotifier<AiAssistantState> {
       throw ArgumentError.value(language, 'language', 'Unsupported AI language');
     }
     _languageCode = language;
+    _stopVoiceDetection();
     _generation++; // Discard old replies, transcription and pending TTS.
     _busy = false;
     final path = _recordingPath;
@@ -201,7 +231,7 @@ class AiAssistantViewModel extends StateNotifier<AiAssistantState> {
       }
 
       _recordingPath =
-          '${Directory.systemTemp.path}/at-ai-${sessionId.hashCode}.m4a';
+          '${Directory.systemTemp.path}/at-ai-${sessionId.hashCode}-${DateTime.now().microsecondsSinceEpoch}.m4a';
       await _enqueueRecorder(() async {
         if (!_isCurrent(generation)) return;
         await _recorder.start(
@@ -214,8 +244,14 @@ class AiAssistantViewModel extends StateNotifier<AiAssistantState> {
       });
       if (!_isCurrent(generation)) return;
       state = state.copyWith(isListening: true, clearError: true);
+      _startVoiceDetection(generation);
     } catch (error) {
       if (_isCurrent(generation)) {
+        _stopVoiceDetection();
+        final path = _recordingPath;
+        _recordingPath = null;
+        await _stopRecordingForReset(path);
+        if (!_isCurrent(generation)) return;
         state = state.copyWith(
           error: 'Unable to start recording: $error',
           isListening: false,
@@ -231,8 +267,10 @@ class AiAssistantViewModel extends StateNotifier<AiAssistantState> {
   Future<void> stopListening() async {
     if (!state.isListening || _busy || _disposed) return;
     final generation = _generation;
+    _stopVoiceDetection();
     _busy = true;
     state = state.copyWith(isListening: false, isLoading: true);
+    _recordingPath = null;
     String? path;
     try {
       path = await _enqueueRecorder(_recorder.stop);
@@ -266,6 +304,69 @@ class AiAssistantViewModel extends StateNotifier<AiAssistantState> {
         _busy = false;
       }
     }
+  }
+
+  void _stopVoiceDetection() {
+    _voiceTimer?.cancel();
+    _voiceTimer = null;
+    unawaited(_amplitudeSubscription?.cancel());
+    _amplitudeSubscription = null;
+  }
+
+  void _startVoiceDetection(int generation) {
+    _stopVoiceDetection();
+    final clock = Stopwatch()..start();
+    final gate = VoiceActivityGate();
+    // record 5 exposes a single-subscription stream for the recorder lifetime.
+    // Cache one broadcast wrapper so later voice messages can subscribe again.
+    _amplitudeStream ??= _recorder
+        .onAmplitudeChanged(const Duration(milliseconds: 200))
+        .asBroadcastStream();
+    _amplitudeSubscription = _amplitudeStream!.listen(
+          (amplitude) {
+            if (_isCurrent(generation) && state.isListening) {
+              gate.addAmplitude(amplitude.current, clock.elapsed);
+            }
+          },
+          onError: (Object error) {
+            if (_isCurrent(generation)) {
+              unawaited(_cancelListening(
+                'Voice detection failed. Please try recording again.',
+              ));
+            }
+          },
+        );
+    _voiceTimer = Timer.periodic(const Duration(milliseconds: 200), (_) {
+      if (!_isCurrent(generation) || !state.isListening) {
+        _stopVoiceDetection();
+        return;
+      }
+      if (_busy) return;
+      switch (gate.action(clock.elapsed)) {
+        case VoiceCaptureAction.send:
+          unawaited(stopListening());
+          break;
+        case VoiceCaptureAction.noSpeech:
+          unawaited(_cancelListening(
+            'No speech detected. Tap the microphone and try again.',
+          ));
+          break;
+        case VoiceCaptureAction.wait:
+          break;
+      }
+    });
+  }
+
+  Future<void> _cancelListening(String message) async {
+    if (_disposed || !state.isListening || _busy) return;
+    final generation = _generation;
+    _busy = true;
+    _stopVoiceDetection();
+    final path = _recordingPath;
+    _recordingPath = null;
+    state = state.copyWith(isListening: false, isLoading: false, error: message);
+    await _stopRecordingForReset(path);
+    if (_isCurrent(generation)) _busy = false;
   }
 
   Future<void> _speak(String text, int generation) async {
@@ -319,6 +420,7 @@ class AiAssistantViewModel extends StateNotifier<AiAssistantState> {
 
   void clear() {
     if (_disposed) return;
+    _stopVoiceDetection();
     _generation++;
     _busy = false;
     final recordingPath = _recordingPath;
@@ -346,6 +448,8 @@ class AiAssistantViewModel extends StateNotifier<AiAssistantState> {
   @override
   void dispose() {
     if (_disposed) return;
+    _stopVoiceDetection();
+    WidgetsBinding.instance.removeObserver(this);
     _disposed = true;
     _generation++;
     _busy = false;

@@ -535,6 +535,31 @@ class _PaymentScreenState extends ConsumerState<PaymentScreen>
               child: SingleChildScrollView(
                 child: Column(
                   children: [
+                    // Cards and Add card appear above the wallet.
+                    // Preserve first-card visibility and all booking-flow gates.
+                    if (state.isCardAndBankVisible ||
+                        state.cardsList.isNotEmpty ||
+                        state.cards.isNotEmpty)
+                      _PaymentMethodsSection(
+                        cards: state.cards,
+                        cardsList: state.cardsList,
+                        selectedCard: state.selectedPaymentMethod,
+                        isShowDeleteCard: state.isShowDeleteCard,
+                        isComeFromBooking: state.isComeFromBooking,
+                        isFromCurrentBooking: state.isFromCurrentBooking,
+                        isFromFeedBack: state.isFromFeedBack,
+                        showAddCard: state.showAddCard,
+                        onCardSelected: (card) {
+                          viewModel.onPaymentMethodChange(card);
+                        },
+                        onCardDelete: (card) {
+                          viewModel.showDeleteCardDialog(card);
+                        },
+                        onAddCardTap: () {
+                          viewModel.onAddCardClick();
+                        },
+                      ),
+
                     // Wallet Details Section (only show when not from booking flow)
                     if (state.isWalletVisible)
                       _WalletDetailsSection(
@@ -566,35 +591,6 @@ class _PaymentScreenState extends ConsumerState<PaymentScreen>
                         },
                       ),
 
-                    // Payment Methods Section
-                    //
-                    // Also render when the gateway supports cards but none are
-                    // saved yet — the "Add card" row lives inside this section,
-                    // so gating purely on having cards meant a new user could
-                    // never add their first one. Native gates the same way:
-                    // `isCardAndBankVisible() || paymentCardsList().isNotEmpty()`
-                    if (state.isCardAndBankVisible ||
-                        state.cardsList.isNotEmpty ||
-                        state.cards.isNotEmpty)
-                      _PaymentMethodsSection(
-                        cards: state.cards,
-                        cardsList: state.cardsList,
-                        selectedCard: state.selectedPaymentMethod,
-                        isShowDeleteCard: state.isShowDeleteCard,
-                        isComeFromBooking: state.isComeFromBooking,
-                        isFromCurrentBooking: state.isFromCurrentBooking,
-                        isFromFeedBack: state.isFromFeedBack,
-                        showAddCard: state.showAddCard,
-                        onCardSelected: (card) {
-                          viewModel.onPaymentMethodChange(card);
-                        },
-                        onCardDelete: (card) {
-                          viewModel.showDeleteCardDialog(card);
-                        },
-                        onAddCardTap: () {
-                          viewModel.onAddCardClick();
-                        },
-                      ),
                   ],
                 ),
               ),
