@@ -14,8 +14,9 @@ class AiMessage {
 class OrderSuggestion {
   final String? pickup;
   final String? destination;
+  final DestinationAddress? resolvedPickup;
 
-  const OrderSuggestion({this.pickup, this.destination});
+  const OrderSuggestion({this.pickup, this.destination, this.resolvedPickup});
 
   factory OrderSuggestion.fromJson(Map<String, dynamic> json) {
     return OrderSuggestion(
@@ -38,8 +39,11 @@ class ConfirmedAiRoute {
 class AiReply {
   final String text;
   final OrderSuggestion? orderSuggestion;
+  final bool pickupNeeded;
+  final bool cancellationRequested;
 
-  const AiReply({required this.text, this.orderSuggestion});
+  const AiReply({required this.text, this.orderSuggestion,
+    this.pickupNeeded = false, this.cancellationRequested = false});
 }
 
 class AiAssistantState {
@@ -50,6 +54,8 @@ class AiAssistantState {
   final String? error;
   final String? retryMessage;
   final OrderSuggestion? orderSuggestion;
+  final bool cancellationRequested;
+  final bool nativeActionBusy;
 
   const AiAssistantState({
     this.messages = const [],
@@ -59,6 +65,8 @@ class AiAssistantState {
     this.error,
     this.retryMessage,
     this.orderSuggestion,
+    this.cancellationRequested = false,
+    this.nativeActionBusy = false,
   });
 
   AiAssistantState copyWith({
@@ -72,6 +80,8 @@ class AiAssistantState {
     bool clearError = false,
     bool clearRetryMessage = false,
     bool clearOrderSuggestion = false,
+    bool? cancellationRequested,
+    bool? nativeActionBusy,
   }) {
     return AiAssistantState(
       messages: messages ?? this.messages,
@@ -85,6 +95,8 @@ class AiAssistantState {
       orderSuggestion: clearOrderSuggestion
           ? null
           : (orderSuggestion ?? this.orderSuggestion),
+      cancellationRequested: cancellationRequested ?? this.cancellationRequested,
+      nativeActionBusy: nativeActionBusy ?? this.nativeActionBusy,
     );
   }
 }

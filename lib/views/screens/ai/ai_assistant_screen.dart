@@ -8,6 +8,7 @@ import '../../../features/ai/ai_models.dart';
 import '../../../features/ai/ai_route_preview.dart';
 import '../../../features/ai/ai_viewmodel.dart';
 import '../../../features/ai/voice_orb.dart';
+import '../../../features/ai/ai_cancellation_card.dart';
 
 class AiAssistantScreen extends ConsumerStatefulWidget {
   final ValueChanged<ConfirmedAiRoute>? onConfirmRoute;
@@ -55,7 +56,8 @@ class _AiAssistantScreenState extends ConsumerState<AiAssistantScreen> {
 
   void _send() {
     final state = ref.read(aiAssistantProvider);
-    if (state.isLoading || state.isListening || _input.text.trim().isEmpty) {
+    if (state.isLoading || state.isListening || state.nativeActionBusy ||
+        _input.text.trim().isEmpty) {
       return;
     }
     final text = _input.text;
@@ -88,7 +90,8 @@ class _AiAssistantScreenState extends ConsumerState<AiAssistantScreen> {
     final state = ref.watch(aiAssistantProvider);
     final viewModel = ref.read(aiAssistantProvider.notifier);
     final itemCount =
-        state.messages.length + (state.orderSuggestion == null ? 0 : 1);
+        state.messages.length + (state.orderSuggestion == null ? 0 : 1) +
+        (state.cancellationRequested ? 1 : 0);
     // Follow new content only when the reader is already near the bottom;
     // typing and unrelated rebuilds never move the list.
     if (itemCount != _lastItemCount || state.isLoading != _lastLoading) {
@@ -245,6 +248,13 @@ class _AiAssistantScreenState extends ConsumerState<AiAssistantScreen> {
                     if (index < state.messages.length) {
                       return _bubble(state.messages[index]);
                     }
+                    if (state.cancellationRequested &&
+                        index == state.messages.length) {
+                      return AiCancellationCard(
+                        onCancelled: viewModel.didCancelTrip,
+                        onDismiss: viewModel.dismissCancellation,
+                        onBusyChanged: viewModel.setNativeActionBusy);
+                    }
                     return _orderCard(state.orderSuggestion!);
                   },
                 ),
@@ -340,7 +350,7 @@ class _AiAssistantScreenState extends ConsumerState<AiAssistantScreen> {
                         shadowColor: Colors.black.withValues(alpha: .35),
                         child: InkWell(
                           customBorder: const CircleBorder(),
-                          onTap: state.isLoading
+                        onTap: state.isLoading || state.nativeActionBusy
                               ? null
                               : (state.isListening
                                     ? viewModel.stopListening
@@ -428,6 +438,7 @@ class _AiAssistantScreenState extends ConsumerState<AiAssistantScreen> {
   }
 
   String _statusText(AiAssistantState state) {
+    if (state.nativeActionBusy) return 'Confirming cancellation…';
     if (state.isListening) return 'Listening… pause to send';
     if (state.isLoading) return 'Thinking…';
     if (state.isSpeaking) return 'Speaking…';

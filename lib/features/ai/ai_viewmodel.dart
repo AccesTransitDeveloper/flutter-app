@@ -11,6 +11,9 @@ import '../../data/ai/ai_repository.dart';
 import '../../core/preferences/shared_preference_manager.dart';
 import 'ai_models.dart';
 import 'voice_activity_gate.dart';
+import 'ai_pickup_resolver.dart';
+import '../../core/map/providers/map_provider.dart';
+import '../../models/requests/get_vehicle_types_request.dart';
 
 final aiRepositoryProvider = Provider.autoDispose<AiRepository>((ref) {
   final repository = AiRepository();
@@ -20,12 +23,15 @@ final aiRepositoryProvider = Provider.autoDispose<AiRepository>((ref) {
 
 final aiAssistantProvider =
     StateNotifierProvider.autoDispose<AiAssistantViewModel, AiAssistantState>(
-  (ref) => AiAssistantViewModel(ref.watch(aiRepositoryProvider)),
+  (ref) => AiAssistantViewModel(ref.watch(aiRepositoryProvider),
+    AiPickupResolver(ref.read(mapManagerProvider))),
 );
 
 class AiAssistantViewModel extends StateNotifier<AiAssistantState>
     with WidgetsBindingObserver {
   final AiRepository repository;
+  final AiPickupResolver pickupResolver;
+  bool _locationPrompted = false;
   final String sessionId =
       '${DateTime.now().microsecondsSinceEpoch}-${DateTime.now().millisecondsSinceEpoch % 100000}';
   final AudioRecorder _recorder = AudioRecorder();
@@ -44,7 +50,7 @@ class AiAssistantViewModel extends StateNotifier<AiAssistantState>
   bool _disposed = false;
   late final Future<void> _ready;
 
-  AiAssistantViewModel(this.repository) : super(const AiAssistantState()) {
+  AiAssistantViewModel(this.repository, this.pickupResolver) : super(const AiAssistantState()) {
     WidgetsBinding.instance.addObserver(this);
     _ready = _initializeGreeting();
   }
@@ -124,6 +130,33 @@ class AiAssistantViewModel extends StateNotifier<AiAssistantState>
 
   Future<void> send(String text) => _sendMessage(text);
 
+  void dismissCancellation() {
+    if (_disposed || state.nativeActionBusy) return;
+    state = state.copyWith(cancellationRequested: false);
+  }
+
+  void setNativeActionBusy(bool busy) {
+    if (_disposed) return;
+    state = state.copyWith(nativeActionBusy: busy);
+  }
+
+  void didCancelTrip() {
+    if (_disposed) return;
+    const messages = {
+      'en': 'Your trip has been cancelled.',
+      'ru': 'Ваша поездка отменена.',
+      'es': 'Tu viaje se ha cancelado.',
+      'ar': 'تم إلغاء رحلتك.',
+      'zh': '您的行程已取消。',
+      'hi': 'आपकी यात्रा रद्द कर दी गई है।',
+      'tr': 'Yolculuğunuz iptal edildi.',
+      'ja': '配車をキャンセルしました。',
+    };
+    state = state.copyWith(cancellationRequested: false,
+      messages: [...state.messages,
+        AiMessage(text: messages[_languageCode]!, fromUser: false)]);
+  }
+
   void setLanguage(String language) {
     if (_disposed || language == _languageCode) return;
     if (!const ['en', 'ru', 'es', 'ar', 'zh', 'hi', 'tr', 'ja'].contains(language)) {
@@ -156,7 +189,8 @@ class AiAssistantViewModel extends StateNotifier<AiAssistantState>
     bool addUserMessage = true,
   }) async {
     final message = text.trim();
-    if (message.isEmpty || _busy || state.isListening || _disposed) return;
+    if (message.isEmpty || _busy || state.isListening || _disposed ||
+        state.nativeActionBusy) return;
     await _ready;
     if (_disposed || _busy) return;
 
@@ -184,14 +218,38 @@ class AiAssistantViewModel extends StateNotifier<AiAssistantState>
       clearOrderSuggestion: true,
     );
     try {
-      final reply = await repository.sendMessage(message, sessionId, history,
-          language: _languageCode);
+      DestinationAddress? pickup;
+      try { pickup = await pickupResolver.resolve(); } catch (_) {
+        // An unavailable GPS fix must result in manual pickup, never a guess.
+      }
       if (!_isCurrent(generation)) return;
+      var reply = await repository.sendMessage(message, sessionId, history,
+          language: _languageCode, currentPickup: pickup?.address);
+      if (!_isCurrent(generation)) return;
+      // Ask the OS only after the assistant actually needs a pickup.
+      if (reply.pickupNeeded && pickup == null && !_locationPrompted) {
+        _locationPrompted = true;
+        try { pickup = await pickupResolver.resolve(requestPermission: true); }
+        catch (_) { /* Keep the explicit manual-pickup request below. */ }
+        if (!_isCurrent(generation)) return;
+        if (pickup != null) {
+          reply = await repository.sendMessage(message, sessionId, history,
+              language: _languageCode, currentPickup: pickup.address);
+        }
+      }
+      if (!_isCurrent(generation)) return;
+      final suggestion = reply.orderSuggestion;
+      final usesGps = pickup != null &&
+          suggestion?.pickup?.trim().toLowerCase() ==
+              pickup.address?.trim().toLowerCase();
       state = state.copyWith(
         messages: [...messages, AiMessage(text: reply.text, fromUser: false)],
         isLoading: false,
-        orderSuggestion: reply.orderSuggestion,
+        orderSuggestion: suggestion == null ? null : OrderSuggestion(
+          pickup: suggestion.pickup, destination: suggestion.destination,
+          resolvedPickup: usesGps ? pickup : null),
         clearOrderSuggestion: reply.orderSuggestion == null,
+        cancellationRequested: reply.cancellationRequested,
         clearRetryMessage: true,
       );
       if (reply.text.isNotEmpty) {
@@ -213,7 +271,7 @@ class AiAssistantViewModel extends StateNotifier<AiAssistantState>
   }
 
   Future<void> startListening() async {
-    if (_busy || state.isListening || _disposed) return;
+    if (_busy || state.isListening || _disposed || state.nativeActionBusy) return;
     final generation = _generation;
     _busy = true;
     try {

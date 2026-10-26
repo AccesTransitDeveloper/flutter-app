@@ -71,7 +71,9 @@ class _AiRoutePreviewState extends ConsumerState<AiRoutePreview> {
     DestinationAddress? destination;
     try {
       final resolved = await Future.wait([
-        _resolveAddress(widget.suggestion.pickup),
+        widget.suggestion.resolvedPickup != null
+            ? Future.value(widget.suggestion.resolvedPickup)
+            : _resolveAddress(widget.suggestion.pickup),
         _resolveAddress(widget.suggestion.destination),
       ]);
       pickup = resolved[0];

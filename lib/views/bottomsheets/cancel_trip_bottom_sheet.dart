@@ -68,6 +68,9 @@ class _CancelTripBottomSheetState extends State<CancelTripBottomSheet> {
   /// Both a selection and a written reason are optional. Never invent a reason.
   String get _selectedReason {
     if (_selectedIndex < 0) return '';
+    if (_selectedIndex != widget.reasons.length - 1) {
+      return widget.reasons[_selectedIndex];
+    }
     final written = (_otherReason ?? '').trim();
     if (written.isNotEmpty) return written;
     return widget.reasons[_selectedIndex];
@@ -146,7 +149,7 @@ class _CancelTripBottomSheetState extends State<CancelTripBottomSheet> {
               const SizedBox(height: AppDimens.paddingM),
             ],
 
-            // Only "Other" is offered; tapping again clears the selection.
+            // Optional quick reasons; tapping again clears the selection.
             Wrap(
               spacing: 8,
               runSpacing: 8,
@@ -163,7 +166,7 @@ class _CancelTripBottomSheetState extends State<CancelTripBottomSheet> {
             ),
 
             // A written explanation is optional, even after selecting Other.
-            if (_selectedIndex >= 0) ...[
+            if (_selectedIndex == widget.reasons.length - 1) ...[
               const SizedBox(height: AppDimens.paddingM),
               AppTextField(
                 onChanged: (value) => setState(() => _otherReason = value),

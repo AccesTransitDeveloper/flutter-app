@@ -127,11 +127,12 @@ class AiRepository {
     String message,
     String sessionId,
     List<AiMessage> history,
-    {required String language}
+    {required String language, String? currentPickup}
   ) async {
     final json = await _post('/api/chat/message', {
       'message': message,
       'language': language,
+      if (currentPickup != null) 'currentPickup': currentPickup,
       'sessionId': sessionId,
       'conversationHistory': history.map((m) => m.toJson()).toList(),
     });
@@ -147,6 +148,9 @@ class AiRepository {
       orderSuggestion: suggestion is Map<String, dynamic>
           ? OrderSuggestion.fromJson(suggestion)
           : null,
+      pickupNeeded: json['locationNeeded'] is Map &&
+          json['locationNeeded']['field'] == 'pickup',
+      cancellationRequested: json['nativeAction'] == 'CANCEL_TRIP',
     );
   }
 
